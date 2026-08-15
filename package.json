@@ -1,5 +1,33 @@
 {
   "dependencies": {
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "mongodb": "^7.5.0",
+    "mongoose": "^9.9.2",
+    "typescript": "^7.0.2"
+  },
+  "name": "taskflow-api",
+  "version": "1.0.0",
+  "description": "task management rest API",
+  "main": "index.ts",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Bomote/taskflow-api.git"
+  },
+  "keywords": [
+    "API",
+    "Task-management"
+  ],
+  "author": "Bomote",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/Bomote/taskflow-api/issues"
+  },
+  "homepage": "https://github.com/Bomote/taskflow-api#readme",
+  "devDependencies": {
+    "@types/node": "^26.2.0"
   }
 }
