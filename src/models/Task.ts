@@ -1,5 +1,6 @@
 import mongoose, { Schema, Document, Types } from 'mongoose';
 
+// added interface for the Task model to define the shape of the document and prevent loose typing
 export interface ITask extends Document {
   title: string;
   description?: string;
