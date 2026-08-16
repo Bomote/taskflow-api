@@ -5,6 +5,8 @@ export interface ITask extends Document {
   title: string;
   description?: string;
   status: 'pending' | 'in-progress' | 'completed';
+  // userId is optional because a task may not be associated with a user
+  //TODO: Make userId required once auth exists
   userId?: Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
