@@ -1,4 +1,3 @@
-// src/server.ts
 import express from 'express';
 import { connectDB } from './config/db.ts';
 import taskRouter from './routes/taskRoutes.ts';
