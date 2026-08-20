@@ -6,13 +6,14 @@ import {
   getTasks,
   updateTask,
 } from '../controllers/taskController.ts';
+import { createTaskSchema, updateTaskSchema, validateRequest } from '../utils/validators.ts';
 
 const taskRouter = Router();
 
 taskRouter.get('/', getTasks);
-taskRouter.post('/', createTask);
+taskRouter.post('/', validateRequest(createTaskSchema), createTask);
 taskRouter.get('/:id', getTaskById);
-taskRouter.put('/:id', updateTask);
+taskRouter.put('/:id', validateRequest(updateTaskSchema), updateTask);
 taskRouter.delete('/:id', deleteTask);
 
 export default taskRouter;
