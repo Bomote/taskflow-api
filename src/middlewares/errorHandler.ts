@@ -1,4 +1,4 @@
-import type { Request, Response, NextFunction, Errback } from "express";
+import type { Request, Response, NextFunction } from "express";
 import z from "zod";
 
 export function errorHandler (err: unknown, req: Request, res: Response, next: NextFunction){

@@ -22,7 +22,8 @@ async function startServer() {
   });
 
   app.use('/api/tasks', taskRouter);
-
+  
+  app.use(errorHandler)
   app
     .listen(PORT, () => {
       console.log(`Server listening on port ${PORT}`);
@@ -32,7 +33,6 @@ async function startServer() {
       process.exit(1);
     });
 
-    app.use(errorHandler)
 }
 
 
