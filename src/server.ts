@@ -1,6 +1,7 @@
 import express from 'express';
 import { connectDB } from './config/db.ts';
 import taskRouter from './routes/taskRoutes.ts';
+import { errorHandler } from './middlewares/errorHandler.ts';
 
 const app = express();
 const PORT = process.env.PORT ?? 5000;
@@ -30,6 +31,9 @@ async function startServer() {
       console.error('Failed to start server:', error);
       process.exit(1);
     });
+
+    app.use(errorHandler)
 }
+
 
 startServer();
