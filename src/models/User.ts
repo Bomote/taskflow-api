@@ -1,4 +1,4 @@
-import mongoose, { Schema, type CallbackWithoutResultAndOptionalError } from 'mongoose';
+import mongoose, { Schema } from 'mongoose';
 import bcrypt from 'bcryptjs';
 
 export interface IUser {
@@ -34,15 +34,10 @@ const userSchema = new Schema<IUser>(
   { timestamps: true }
 );
 
-userSchema.pre('save', async function (next: CallbackWithoutResultAndOptionalError) {
-  if (!this.isModified('password')) return next();
+userSchema.pre('save', async function () {
+  if (!this.isModified('password')) return;
 
-  try {
-    this.password = await bcrypt.hash(this.password, SALT_ROUNDS);
-    next();
-  } catch (error) {
-    next(error as Error);
-  }
+  this.password = await bcrypt.hash(this.password, SALT_ROUNDS);
 });
 
 export const User = mongoose.model<IUser>('User', userSchema);
