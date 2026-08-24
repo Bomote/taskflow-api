@@ -1,7 +1,7 @@
-import mongoose, { Schema, Document, CallbackWithoutResultAndOptionalError, type HydratedDocument } from 'mongoose';
+import mongoose, { Schema, type CallbackWithoutResultAndOptionalError } from 'mongoose';
 import bcrypt from 'bcryptjs';
 
-export interface IUser extends Document {
+export interface IUser {
   name: string;
   email: string;
   password: string;
@@ -34,10 +34,8 @@ const userSchema = new Schema<IUser>(
   { timestamps: true }
 );
 
-userSchema.pre('save', async function (this: HydratedDocument<IUser>, next: CallbackWithoutResultAndOptionalError) {
-  if (!this.isModified('password')) {
-    return next();
-  }
+userSchema.pre('save', async function (next: CallbackWithoutResultAndOptionalError) {
+  if (!this.isModified('password')) return next();
 
   try {
     this.password = await bcrypt.hash(this.password, SALT_ROUNDS);
