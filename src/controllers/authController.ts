@@ -11,10 +11,6 @@ if (!rawJwtSecret) {
 
 const jwtSecret: string = rawJwtSecret;
 
-if (!jwtSecret) {
-  throw new Error('JWT_SECRET is not defined in the environment variables');
-}
-
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Unknown error';
 }

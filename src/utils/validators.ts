@@ -8,7 +8,7 @@ export const createTaskSchema = z.object({
 });
 
 export const registerSchema = z.object({
-  name: z.string(),
+  name: z.string().min(2),
   email: z.email(),
   password: z.string().min(8, "Password must be at least 8 characters")
   .regex(/[A-Z]/, "Must contain one uppercase letter")
@@ -18,13 +18,8 @@ export const registerSchema = z.object({
 })
 
 export const loginSchema = z.object({
-  name: z.string(),
   email: z.email(),
-  password: z.string().min(8, "Password must be at least 8 characters")
-  .regex(/[A-Z]/, "Must contain one uppercase letter")
-  .regex(/[a-z]/,"Must contain one lowercase letter")
-  .regex(/[0-9]/, "Must contain a number")
-  .regex(/[^A-Za-z0-9]/, "Must contain a special character")
+  password: z.string(),
 })
 
 export const updateTaskSchema = createTaskSchema.partial();
