@@ -1,5 +1,20 @@
 import type { Request, Response } from 'express';
 import { Task } from '../models/Task.ts';
+import type { JwtPayload } from 'jsonwebtoken';
+
+type AuthenticatedUser = JwtPayload & {
+  id: string;
+}
+
+function isAuthenticatedUser(
+  user: string | JwtPayload | undefined,
+): user is AuthenticatedUser {
+  return (
+    typeof user === "object" &&
+    user !== null && 
+    typeof (user as JwtPayload).id === "string"
+  );
+}
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Unknown error';
@@ -12,8 +27,19 @@ function isValidObjectId(id: unknown): id is string {
 }
 
 export async function getTasks(req: Request, res: Response): Promise<Response> {
+  if(!req.user) {
+    return res.status(401).json({ success: false, error: 'Unauthorized or malformed token' });
+  }
+
+  if (!isAuthenticatedUser(req.user)) {
+    return res.status(401).json({
+      success: false,
+      error: "Unauthorized or malformed token",
+    });
+  }
+
   try {
-    const { id: userId } = req.user!;
+    const { id: userId } = req.user;
     const taskList = await Task.find({ userId });
     return res.status(200).json({ success: true, data: taskList });
   } catch (error) {
@@ -23,7 +49,19 @@ export async function getTasks(req: Request, res: Response): Promise<Response> {
 
 export async function createTask(req: Request, res: Response): Promise<Response> {
   const { title, description, status } = req.body;
-  const { id: userId } = req.user!;
+
+  if(!req.user) {
+    return res.status(401).json({ success: false, error: 'Unauthorized or malformed token' });
+  }
+
+  if (!isAuthenticatedUser(req.user)) {
+    return res.status(401).json({
+      success: false,
+      error: "Unauthorized or malformed token",
+    });
+  }
+
+  const { id: userId } = req.user;
 
   try {
     const createdTask = await Task.create({ title, description, status, userId });
@@ -34,8 +72,19 @@ export async function createTask(req: Request, res: Response): Promise<Response>
 }
 
 export async function getTaskById(req: Request, res: Response): Promise<Response> {
+  if(!req.user) {
+    return res.status(401).json({ success: false, error: 'Unauthorized or malformed token' });
+  }
+
+  if (!isAuthenticatedUser(req.user)) {
+    return res.status(401).json({
+      success: false,
+      error: "Unauthorized or malformed token",
+    });
+  }
+
   const { id: taskId } = req.params;
-  const { id: userId } = req.user!;
+  const { id: userId } = req.user;
 
   if (!isValidObjectId(taskId)) {
     return res.status(400).json({ success: false, message: 'Invalid ID format' });
@@ -55,8 +104,19 @@ export async function getTaskById(req: Request, res: Response): Promise<Response
 }
 
 export async function updateTask(req: Request, res: Response): Promise<Response> {
+  if(!req.user) {
+    return res.status(401).json({ success: false, error: 'Unauthorized or malformed token' });
+  }
+
+  if (!isAuthenticatedUser(req.user)) {
+    return res.status(401).json({
+      success: false,
+      error: "Unauthorized or malformed token",
+    });
+  }
+
   const { id: taskId } = req.params;
-  const { id: userId } = req.user!;
+  const { id: userId } = req.user;
 
   if (!isValidObjectId(taskId)) {
     return res.status(400).json({ success: false, message: 'Invalid ID format' });
@@ -79,8 +139,19 @@ export async function updateTask(req: Request, res: Response): Promise<Response>
 }
 
 export async function deleteTask(req: Request, res: Response): Promise<Response> {
+  if(!req.user) {
+    return res.status(401).json({ success: false, error: 'Unauthorized or malformed token' });
+  }
+  
+  if (!isAuthenticatedUser(req.user)) {
+    return res.status(401).json({
+      success: false,
+      error: "Unauthorized or malformed token",
+    });
+  }
+  
   const { id: taskId } = req.params;
-  const { id: userId } = req.user!;
+  const { id: userId } = req.user;
 
   if (!isValidObjectId(taskId)) {
     return res.status(400).json({ success: false, message: 'Invalid ID format' });
