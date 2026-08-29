@@ -1,19 +1,6 @@
 import type { NextFunction, Request, Response } from 'express';
 import jwt, { type JwtPayload } from 'jsonwebtoken';
-
-type AuthenticatedUser = JwtPayload & {
-  id: string;
-}
-
-function isAuthenticatedUser(
-  user: string | JwtPayload | undefined,
-): user is AuthenticatedUser {
-  return (
-    typeof user === "object" &&
-    user !== null && 
-    typeof (user as JwtPayload).id === "string"
-  );
-}
+import type { AuthenticatedUser } from '../types/express.js';
 
 const rawJwtSecret = process.env.JWT_SECRET;
 
@@ -22,6 +9,12 @@ if (!rawJwtSecret) {
 }
 
 const jwtSecret: string = rawJwtSecret;
+
+function isAuthenticatedUser(
+  payload: string | JwtPayload
+): payload is AuthenticatedUser {
+  return typeof payload === 'object' && payload !== null && typeof payload.id === 'string';
+}
 
 export function protect(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.headers['authorization'];
@@ -37,17 +30,13 @@ export function protect(req: Request, res: Response, next: NextFunction) {
   }
 
   try {
-    req.user = jwt.verify(token, jwtSecret);
-    if(!req.user) {
-    return res.status(401).json({ success: false, error: 'Unauthorized or malformed token' });
-  }
-  
-  if (!isAuthenticatedUser(req.user)) {
-    return res.status(401).json({
-      success: false,
-      error: "Unauthorized or malformed token",
-    });
-  }
+    const decoded = jwt.verify(token, jwtSecret);
+
+    if (!isAuthenticatedUser(decoded)) {
+      return res.status(401).json({ success: false, error: 'Unauthorized or malformed token' });
+    }
+
+    req.user = decoded;
     next();
   } catch (error) {
     return res.status(401).json({ success: false, error: 'Unauthorized or malformed token' });
