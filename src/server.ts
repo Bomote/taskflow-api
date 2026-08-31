@@ -1,21 +1,21 @@
 import express from 'express';
-import { connectDB } from './config/db.ts';
-import taskRouter from './routes/taskRoutes.ts';
-import { errorHandler } from './middlewares/errorHandler.ts';
-import authRouter from './routes/authRoutes.ts';
 import helmet from 'helmet';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
+import { connectDB } from './config/db.ts';
+import taskRouter from './routes/taskRoutes.ts';
+import authRouter from './routes/authRoutes.ts';
+import { errorHandler } from './middlewares/errorHandler.ts';
 
 const app = express();
 const PORT = process.env.PORT ?? 5000;
 
 const authLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 100,
-    standardHeaders: 'draft-8',
-    legacyHeaders: false
-})
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+});
 
 async function startServer() {
   try {
@@ -36,8 +36,8 @@ async function startServer() {
 
   app.use('/api/tasks', taskRouter);
   app.use('/api/auth', authLimiter, authRouter);
-  app.use(errorHandler)
-  
+  app.use(errorHandler);
+
   app
     .listen(PORT, () => {
       console.log(`Server listening on port ${PORT}`);
@@ -46,8 +46,6 @@ async function startServer() {
       console.error('Failed to start server:', error);
       process.exit(1);
     });
-
 }
-
 
 startServer();
