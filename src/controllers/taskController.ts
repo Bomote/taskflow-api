@@ -83,7 +83,7 @@ export async function updateTask(req: Request, res: Response): Promise<Response>
     const updatedTask = await Task.findOneAndUpdate(
       { _id: taskId, userId: req.user.id },
       req.body,
-      { new: true, runValidators: true }
+      { returnDocument: 'after', runValidators: true }
     );
 
     if (!updatedTask) {
