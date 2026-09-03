@@ -2,7 +2,7 @@
 
 A REST API for task management, built as a portfolio piece demonstrating production-grade Node.js/TypeScript backend practices — clean architecture, input validation, authentication, automated testing, and containerized deployment.
 
-> 🚧 Work in progress — Phase 2 (Validation & Error Handling) complete, Phase 3 (Authentication & Security Hardening) next.
+> 🚧 Work in progress — Phase 3 (Authentication & Security Hardening) complete, Phase 4 (Testing & Documentation) next.
 
 ## Live Demo
 
@@ -14,20 +14,24 @@ _Coming in Phase 6 — will link the deployed Render URL and `/api-docs` here._
 - **Framework:** Express
 - **Database:** MongoDB (Atlas), Mongoose
 - **Validation:** Zod
-- _(Coming later: JWT, Jest/Supertest, Swagger, Docker)_
+- **Auth:** JWT (jsonwebtoken), bcryptjs
+- **Security:** helmet, cors, express-rate-limit
+- _(Coming later: Jest/Supertest, Swagger, Docker)_
 
 ## Endpoints
 
-| Method | Path              | Description             | Auth Required |
-|--------|-------------------|--------------------------|----------------|
-| GET    | `/health`         | Health check             | No             |
-| GET    | `/api/tasks`      | List all tasks           | No _(yet)_     |
-| POST   | `/api/tasks`      | Create a new task        | No _(yet)_     |
-| GET    | `/api/tasks/:id`  | Fetch a task by ID       | No _(yet)_     |
-| PUT    | `/api/tasks/:id`  | Update a task by ID      | No _(yet)_     |
-| DELETE | `/api/tasks/:id`  | Delete a task by ID      | No _(yet)_     |
+| Method | Path                | Description             | Auth Required |
+|--------|---------------------|--------------------------|----------------|
+| GET    | `/health`           | Health check             | No             |
+| POST   | `/api/auth/register`| Register a new user      | No             |
+| POST   | `/api/auth/login`   | Log in, receive a JWT    | No             |
+| GET    | `/api/tasks`        | List the caller's tasks  | Yes            |
+| POST   | `/api/tasks`        | Create a new task        | Yes            |
+| GET    | `/api/tasks/:id`    | Fetch one of the caller's tasks by ID | Yes |
+| PUT    | `/api/tasks/:id`    | Update one of the caller's tasks      | Yes |
+| DELETE | `/api/tasks/:id`    | Delete one of the caller's tasks      | Yes |
 
-_(Auth column will update once JWT protection lands in Phase 3.)_
+Task routes require `Authorization: Bearer <token>`, obtained via `/api/auth/login`. `/api/auth/*` routes are rate-limited (100 requests / 15 min per client).
 
 ## Response Shape
 
@@ -39,45 +43,51 @@ Every endpoint responds with one of two consistent shapes:
 
 1. Clone the repo and `cd` into it.
 2. `npm install`
-3. Copy `.env.example` to `.env` and fill in your own MongoDB Atlas connection string.
+3. Copy `.env.example` to `.env` and fill in your own MongoDB Atlas connection string and a generated `JWT_SECRET` (`openssl rand -hex 32`).
    - If you're on Windows and hit `ECONNREFUSED` on a DNS SRV lookup despite the connection string being correct, see **Known Issues** below.
 4. Run the server:
    ```
    node --env-file=.env src/server.ts
    ```
 5. Confirm it's up: `curl http://localhost:5000/health`
+6. Register a user, log in, and use the returned token as a `Bearer` token on task requests.
 
 ## Architecture
 
-Request flow: **client → `server.ts` → (route-level `validateRequest` middleware, on write operations) → `taskRoutes.ts` → `taskController.ts` → `Task.ts` (Mongoose) → MongoDB**, with any thrown error diverted at any point to `errorHandler.ts` instead of continuing down the normal path. Each layer has one job and doesn't know how the others do theirs:
+Request flow for task routes: **client → `server.ts` (helmet, cors, json parsing) → `protect` (JWT verification) → route-level `validateRequest` (on write operations) → `taskRoutes.ts` → `taskController.ts` → `Task.ts` (Mongoose) → MongoDB**, with any thrown error diverted at any point to `errorHandler.ts`. Auth routes follow the same shape minus `protect` (you can't require a token to obtain one), with `express-rate-limit` applied instead.
 
 - **`config/db.ts`** — owns the entire database connection lifecycle: validates `MONGODB_URI` exists, connects via Mongoose, confirms the connection with a `ping` command, and guards against duplicate/concurrent connection attempts via `readyState`.
-- **`models/Task.ts`** — defines the shape of a task document (fields, types, the `status` enum, the `userId` reference) — the single source of truth every other layer validates against.
-- **`utils/validators.ts`** — Zod schemas describing valid input shape for creating and updating a task, plus `validateRequest(schema)`, a single generic middleware-builder that can validate any route's body against any Zod schema.
-- **`middlewares/errorHandler.ts`** — the single place every error in the app eventually lands, responsible for turning a raised error into a consistent, safe JSON response — never a raw stack trace.
-- **`controllers/taskController.ts`** — the business logic: one function per CRUD operation, each responsible for querying via Mongoose and shaping a response with the correct status code.
-- **`routes/taskRoutes.ts`** — pure wiring: maps HTTP verb + relative path to `validateRequest` (where relevant) and a controller function, in sequence.
-- **`server.ts`** — the assembly point: connects the DB first (refusing to start if that fails), registers middleware, mounts routers, registers `errorHandler` last, and only then starts listening.
+- **`models/Task.ts`** — defines the shape of a task document, including a required `userId` reference tying every task to its owner.
+- **`models/User.ts`** — defines the user document shape, with a pre-save hook that hashes the password via bcrypt before it's ever written, and `select: false` on the password field so it's excluded from query results by default.
+- **`utils/validators.ts`** — Zod schemas describing valid input shape for every write endpoint (tasks and auth), plus `validateRequest(schema)`, a single generic middleware-builder reused across all of them.
+- **`middlewares/protect.ts`** — verifies the `Authorization` header's JWT and attaches the decoded, type-checked user payload onto `req.user` for downstream use. Rejects with 401 on anything missing, malformed, or invalid.
+- **`middlewares/errorHandler.ts`** — the single place every error in the app eventually lands, turning a raised error into a consistent, safe JSON response — never a raw stack trace.
+- **`controllers/authController.ts`** — registration and login logic: duplicate-email checks, password hashing (via the model's hook), credential comparison, and JWT issuance.
+- **`controllers/taskController.ts`** — CRUD logic, every query scoped to `{ ..., userId: req.user.id }` so one user can never read, modify, or delete another user's tasks.
+- **`routes/taskRoutes.ts`** / **`routes/authRoutes.ts`** — pure wiring: maps HTTP verb + relative path to the relevant middleware (`protect`, `validateRequest`) and controller function, in sequence.
+- **`server.ts`** — the assembly point: connects the DB first (refusing to start if that fails), registers helmet/cors/json middleware, mounts routers (auth routes behind the rate limiter), registers `errorHandler` last, and only then starts listening.
 
 ## Design Decisions
 
-- **`validateRequest` is one generic middleware, not one per route.** It takes a Zod schema as a parameter and returns a configured Express middleware function — meaning the same piece of code validates task creation, task updates, and (later) any other resource's input, just by being called with a different schema. Avoids duplicating near-identical validation middleware for every new route.
-- **`updateTaskSchema` is derived from `createTaskSchema` via `.partial()`, not hand-duplicated.** A `PUT` request shouldn't have to resend every field just to change one — `.partial()` makes every field optional while reusing the exact same underlying rules (e.g. `title`'s minimum length still applies *if* provided). If a field is ever added to the create schema, the update schema inherits it automatically instead of silently drifting out of sync.
-- **Validation errors are forwarded via `next(err)`, never handled inside `validateRequest` itself.** This keeps error *formatting* in exactly one place (`errorHandler.ts`) rather than letting each piece of middleware decide its own response shape — critical for keeping error responses consistent as the app grows.
-- **`errorHandler` distinguishes Zod validation errors (400) from everything else (500), and never leaks a stack trace to the client.** A `ZodError` means the client sent bad input — that's a 400, with the specific validation issues returned so the client can fix its request. Anything else is treated as an unexpected server-side failure — logged server-side via `console.error` for debugging, but returned to the client as a generic message only, since the earlier default-Express behavior (seen during testing) leaked full file paths and internal stack traces in the response body.
-- **`runValidators: true` on updates.** Mongoose doesn't re-run schema validation on `findByIdAndUpdate` by default — only on document creation. Without opting in explicitly, a `PUT` request could silently set `status` to a value outside the allowed enum, bypassing the schema's own constraint. Enabled deliberately to close that gap. (Zod now also independently enforces this at the request-validation layer, before Mongoose ever sees the data — defense in depth, not redundant: Zod catches it at the HTTP boundary, Mongoose catches it at the persistence boundary.)
-- **Status codes split by failure type, not collapsed into one generic error.** `400` for client-caused bad input. `404` for a well-formed ID that simply doesn't match any document. `500` for unexpected server-side failures. Collapsing these into one code would hide information a real API consumer needs to handle errors correctly.
-- **`userId` is optional for now.** Auth doesn't exist yet (Phase 3), so tasks currently have no real owner. `TODO`: make `userId` required once JWT auth is in place — an unowned task won't make sense in an authenticated app.
+- **Task ownership is enforced at the query level, not via a fetch-then-check pattern.** Every task lookup, update, and delete filters by `{ _id: taskId, userId: req.user.id }` in a single query, rather than fetching by ID first and comparing owners afterward. A request for another user's task returns **404**, not 403 — from the requester's perspective, a task they don't own is indistinguishable from one that doesn't exist at all.
+- **Login and registration return a consistent, generic "Invalid credentials" message** for both a nonexistent email and a correct email with the wrong password. Returning different messages for each case would let an attacker enumerate which emails are registered — the two failure modes are deliberately indistinguishable to the client.
+- **Passwords are never handled as plaintext outside the initial request.** `User.ts`'s pre-save hook hashes the password automatically before any save — `authController.ts` never hashes anything itself. The schema field also carries `select: false`, so ordinary queries never return the hash; `login` explicitly opts back in with `.select('+password')` at the one point it's genuinely needed.
+- **JWTs are signed with HS256 using a single shared secret, not RS256.** RS256 requires an asymmetric key pair; this project uses one generated secret (`openssl rand -hex 32`) shared between signing and verification, so HS256 (jsonwebtoken's default) is the correct match. The token payload is kept minimal — just the user's ID — since a JWT is signed but not encrypted, and anything in the payload is readable by anyone holding the token.
+- **`req.user`'s type was tightened after the fact, not left loose.** Early versions typed the decoded JWT payload as the library's broad `string | JwtPayload`, requiring every controller to independently re-verify its shape before trusting `req.user.id`. Once it was clear `protect` is the *only* place `req.user` is ever assigned, the global type augmentation was narrowed to `AuthenticatedUser | undefined`, moving the shape-check into `protect` itself and letting every controller downstream trust `req.user.id` with a single `if (!req.user)` guard instead of repeating a full type-guard everywhere.
+- **Rate limiting is scoped to `/api/auth/*`, not applied globally.** A legitimate logged-in user could plausibly exceed 100 requests in 15 minutes doing normal task CRUD; 100 login attempts in the same window from one source is almost certainly a brute-force attempt, not real usage. Scoping the limiter narrowly targets the actual risk without throttling normal use elsewhere.
+- **`runValidators: true` on updates**, alongside Zod's own request-level validation — deliberate defense in depth. Zod catches invalid input at the HTTP boundary before it reaches the database layer at all; `runValidators` ensures Mongoose's own schema rules (the `status` enum, in particular) are enforced a second time at the persistence boundary, since `findOneAndUpdate` doesn't run schema validation by default.
+- **Status codes are split by failure type, not collapsed into one generic error**: `400` for client-caused bad input, `401` for authentication failures, `404` for a well-formed ID that doesn't match (or doesn't belong to the caller), `500` for unexpected server-side failures.
 
 ## Known Issues
 
 - **Node fails to resolve `mongodb+srv://` DNS SRV records on some Windows setups**, even when the OS itself resolves the same record correctly (confirmed via `nslookup`). Root cause not fully isolated — firewall/antivirus interference with Node's DNS layer is the leading suspicion, unconfirmed. **Workaround used in this project:** a non-SRV connection string (Atlas → Connect → Drivers → older driver version), which lists the shard hosts directly and avoids the SRV lookup entirely.
+- **Mongoose 9's TypeScript types for `schema.pre('save', ...)` reject a hook mixing `async` with a manual `next` callback parameter** — the two calling conventions (legacy callback-style, modern promise-style) are typed as mutually exclusive overloads, not a supported hybrid. Mixing them causes every overload to fail to match, and TypeScript reports a misleading error against an unrelated overload (`createCollection`) instead of anything indicating the real cause. Resolved by using pure `async`/`await` with no `next` parameter in the password-hashing hook — errors now propagate via promise rejection instead.
 
 ## Progress Log
 
 - [x] Phase 1: Local setup, folder structure, database connection, core CRUD, health check — verified against a live MongoDB Atlas connection
 - [x] Phase 2: Zod validation on create/update, centralized error handling — verified malformed requests return clean structured JSON, not a stack trace
-- [ ] Phase 3: JWT auth, security hardening
+- [x] Phase 3: JWT auth (register/login), password hashing, protected + ownership-scoped task routes, helmet/cors/rate-limiting — verified via cross-user access tests and a real rate-limit stress test (429 confirmed at request 101)
 - [ ] Phase 4: Testing (Jest/Supertest), Swagger/Postman docs
 - [ ] Phase 5: Docker, GitHub Actions CI
 - [ ] Phase 6: Deployment, uptime monitoring, seed script
