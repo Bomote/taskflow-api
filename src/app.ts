@@ -15,16 +15,16 @@ const authLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-  app.use(helmet());
-  app.use(cors());
-  app.use(express.json());
+app.use(helmet());
+app.use(cors());
+app.use(express.json());
 
-  app.get('/health', (req, res) => {
-    res.status(200).json({ status: 'ok', timestamp: new Date() });
-  });
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok', timestamp: new Date() });
+});
 
-  app.use('/api/tasks', taskRouter);
-  app.use('/api/auth', authLimiter, authRouter);
-  app.use(errorHandler);
+app.use('/api/tasks', taskRouter);
+app.use('/api/auth', authLimiter, authRouter);
+app.use(errorHandler);
 
-  export default app
+export default app;
