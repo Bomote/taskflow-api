@@ -49,7 +49,7 @@ test('logs in successfully with valid credentials', async () => {
     email: validUser.email,
     password: validUser.password,
   });
-
+    
   expect(response.status).toBe(200);
   expect(response.body.success).toBe(true);
   expect(typeof response.body.data.token).toBe('string');
@@ -60,7 +60,7 @@ test('rejects login with an incorrect password', async () => {
     email: validUser.email,
     password: 'WrongPassword!123',
   });
-
+  
   expect(response.status).toBe(400);
   expect(response.body.success).toBe(false);
 });
