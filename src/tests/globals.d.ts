@@ -1,4 +1,4 @@
-import { MongoMemoryServer } from 'mongodb-memory-server'
+import type { MongoMemoryServer } from 'mongodb-memory-server';
 
 declare global {
   var __MONGO_INSTANCE__: MongoMemoryServer;
