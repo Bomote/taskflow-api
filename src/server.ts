@@ -1,8 +1,6 @@
-import express from 'express';
 import { connectDB } from './config/db.ts';
-import { serverConfig } from './app.ts';
+import app from './app.ts';
 
-const app = express();
 const PORT = process.env.PORT ?? 5000;
 
 
@@ -14,9 +12,7 @@ async function startServer() {
     console.error('Failed to connect to database:', error);
     process.exit(1);
   }
-  
-  await serverConfig();
-  
+    
 
   app
     .listen(PORT, () => {
