@@ -15,7 +15,6 @@ const clientOptions = {
   },
 };
 
-// Mongoose connection.readyState values:
 // 0 = disconnected, 1 = connected, 2 = connecting, 3 = disconnecting
 const READY_STATE = {
   DISCONNECTED: 0,
@@ -27,14 +26,10 @@ const READY_STATE = {
 let connectingPromise: Promise<typeof mongoose.connection> | null = null;
 
 export async function connectDB() {
-  // Already connected — return the existing connection, don't reconnect.
   if (mongoose.connection.readyState === READY_STATE.CONNECTED) {
     return mongoose.connection;
   }
 
-  // A connection attempt is already in flight (e.g. two near-simultaneous
-  // callers during startup) — return that same in-progress promise instead
-  // of racing a second mongoose.connect() call against it.
   if (connectingPromise) {
     return connectingPromise;
   }
@@ -49,8 +44,7 @@ export async function connectDB() {
 
     console.log('Pinged your deployment. You successfully connected to MongoDB!');
 
-    // Listen once for post-connect errors (e.g. Atlas network blip after
-    // a successful boot). Attached only on first successful connect.
+    // Listen once for post-connect errors
     mongoose.connection.on('error', (err) => {
       console.error('MongoDB connection error after initial connect:', err);
     });
@@ -61,9 +55,6 @@ export async function connectDB() {
   try {
     return await connectingPromise;
   } finally {
-    // Clear the in-flight marker whether it succeeded or failed, so a
-    // failed attempt can be retried by a later call instead of being
-    // stuck returning a rejected promise forever.
     connectingPromise = null;
   }
 }
