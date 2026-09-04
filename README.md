@@ -19,7 +19,7 @@ _Coming in Phase 6 — will link the deployed Render URL and `/api-docs` here._
 - **Testing:** Jest, Supertest, mongodb-memory-server, @swc/jest
 - _(Coming later: Swagger, Docker)_
 
-## Endpoints
+## Endpoints 
 
 | Method | Path                | Description             | Auth Required |
 |--------|---------------------|--------------------------|----------------|

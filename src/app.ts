@@ -5,6 +5,7 @@ import rateLimit from 'express-rate-limit';
 import taskRouter from './routes/taskRoutes.ts';
 import authRouter from './routes/authRoutes.ts';
 import { errorHandler } from './middlewares/errorHandler.ts';
+import { swaggerUiServe, swaggerUiSetup } from './config/swagger.ts';
 
 const app = express();
 
@@ -26,5 +27,6 @@ app.get('/health', (req, res) => {
 app.use('/api/tasks', taskRouter);
 app.use('/api/auth', authLimiter, authRouter);
 app.use(errorHandler);
+app.use('/api-docs', swaggerUiServe, swaggerUiSetup);
 
 export default app;

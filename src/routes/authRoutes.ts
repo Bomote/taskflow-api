@@ -1,4 +1,3 @@
-// src/routes/authRoutes.ts
 import { Router } from 'express';
 import { loginUser, registerUser } from '../controllers/authController.ts';
 import { loginSchema, registerSchema, validateRequest } from '../utils/validators.ts';
