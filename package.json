@@ -17,10 +17,11 @@
   "name": "taskflow-api",
   "version": "1.0.0",
   "description": "task management rest API",
-  "main": "index.ts",
+  "main": "server.ts",
   "scripts": {
     "test": "cross-env NODE_OPTIONS=--experimental-vm-modules jest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build": "tsc"
   },
   "repository": {
     "type": "git",
