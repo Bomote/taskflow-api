@@ -37,7 +37,7 @@ export function protect(req: Request, res: Response, next: NextFunction) {
     }
 
     req.user = decoded;
-    next();
+    return next();
   } catch (error) {
     return res.status(401).json({ success: false, error: 'Unauthorized or malformed token' });
   }
