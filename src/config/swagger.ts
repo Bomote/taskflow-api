@@ -11,7 +11,7 @@ const options: swaggerJsdoc.Options = {
     },
     servers: [
       { url: 'http://localhost:5000', description: 'Local development' },
-      { url: 'http://render/bomote/api', description: 'Placeholder for live URL (Phase 6)' },
+      { url: 'https://taskflow-api-l7hr.onrender.com', description: 'live URL' },
     ],
     components: {
       securitySchemes: {
