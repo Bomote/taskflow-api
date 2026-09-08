@@ -16,6 +16,7 @@ const authLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+app.set('trust proxy', 1);
 app.use(helmet());
 app.use(cors());
 app.use(express.json());
