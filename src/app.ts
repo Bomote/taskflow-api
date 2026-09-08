@@ -27,10 +27,10 @@ app.get('/health', (req, res) => {
 
 app.use('/api/tasks', taskRouter);
 app.use('/api/auth', authLimiter, authRouter);
+app.use('/api-docs', swaggerUiServe, swaggerUiSetup);
 app.use((req, res) => {
   res.status(404).json({ success: false, message: 'Route not found' });
 });
-app.use('/api-docs', swaggerUiServe, swaggerUiSetup);
 app.use(errorHandler);
 
 export default app;
