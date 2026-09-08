@@ -39,9 +39,20 @@ test('rejects registration when a required field is missing', async () => {
 test('rejects registration when the email is already taken', async () => {
   const response = await request(app).post('/api/auth/register').send(validUser);
 
+  expect(response.status).toBe(409);
+  expect(response.body.success).toBe(false);
+  expect(response.body.error).toMatch(/already registered/i);
+});
+
+test('rejects registration when the password fails the complexity rules', async () => {
+  const response = await request(app).post('/api/auth/register').send({
+    name: 'Weak Password',
+    email: 'weak@example.com',
+    password: 'password123',
+  });
+
   expect(response.status).toBe(400);
   expect(response.body.success).toBe(false);
-  expect(response.body.message).toMatch(/already registered/i);
 });
 
 test('logs in successfully with valid credentials', async () => {
@@ -61,8 +72,9 @@ test('rejects login with an incorrect password', async () => {
     password: 'WrongPassword!123',
   });
   
-  expect(response.status).toBe(400);
+  expect(response.status).toBe(401);
   expect(response.body.success).toBe(false);
+  expect(response.body.error).toBe('Invalid credentials');
 });
 
 test('rejects login for a nonexistent email, with the same message as a wrong password', async () => {
@@ -71,7 +83,7 @@ test('rejects login for a nonexistent email, with the same message as a wrong pa
     password: 'WrongPassword!123',
   });
 
-  expect(response.status).toBe(400);
+  expect(response.status).toBe(401);
   expect(response.body.success).toBe(false);
-  expect(response.body.message).toBe('Invalid credentials');
+  expect(response.body.error).toBe('Invalid credentials');
 });

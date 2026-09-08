@@ -30,7 +30,7 @@ export function protect(req: Request, res: Response, next: NextFunction) {
   }
 
   try {
-    const decoded = jwt.verify(token, jwtSecret);
+    const decoded = jwt.verify(token, jwtSecret, { algorithms: ['HS256'] });
 
     if (!isAuthenticatedUser(decoded)) {
       return res.status(401).json({ success: false, error: 'Unauthorized or malformed token' });

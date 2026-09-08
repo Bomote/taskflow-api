@@ -19,9 +19,27 @@ const taskRouter = Router();
  *     tags: [Tasks]
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         required: false
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           default: 1
+ *         description: Page number, starting at 1
+ *       - in: query
+ *         name: limit
+ *         required: false
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 100
+ *           default: 20
+ *         description: Tasks per page, capped at 100
  *     responses:
  *       200:
- *         description: A list of the caller's tasks
+ *         description: A paginated list of the caller's tasks, newest first
  *         content:
  *           application/json:
  *             schema:
@@ -33,6 +51,19 @@ const taskRouter = Router();
  *                   type: array
  *                   items:
  *                     type: object
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     page:
+ *                       type: integer
+ *                     limit:
+ *                       type: integer
+ *                     total:
+ *                       type: integer
+ *                     totalPages:
+ *                       type: integer
+ *       400:
+ *         description: Invalid pagination parameters
  *       401:
  *         description: Missing or invalid token
  */

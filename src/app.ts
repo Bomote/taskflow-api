@@ -29,7 +29,7 @@ app.use('/api/tasks', taskRouter);
 app.use('/api/auth', authLimiter, authRouter);
 app.use('/api-docs', swaggerUiServe, swaggerUiSetup);
 app.use((req, res) => {
-  res.status(404).json({ success: false, message: 'Route not found' });
+  res.status(404).json({ success: false, error: 'Route not found' });
 });
 app.use(errorHandler);
 
