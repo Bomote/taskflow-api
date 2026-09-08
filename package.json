@@ -21,7 +21,8 @@
   "scripts": {
     "test": "cross-env NODE_OPTIONS=--experimental-vm-modules jest",
     "typecheck": "tsc --noEmit",
-    "build": "tsc"
+    "build": "tsc",
+    "seed": "cross-env CONFIRM_SEED=true node --env-file=.env src/utils/seed.ts"
   },
   "repository": {
     "type": "git",
