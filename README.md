@@ -37,13 +37,13 @@ Hosted on Render's free tier — the instance spins down after inactivity, so th
 | PUT    | `/api/tasks/:id`    | Update one of the caller's tasks      | Yes |
 | DELETE | `/api/tasks/:id`    | Delete one of the caller's tasks      | Yes |
 
-Task routes require `Authorization: Bearer <token>`, obtained via `/api/auth/login`. `/api/auth/*` routes are rate-limited (100 requests / 15 min per client). `GET /api/tasks` accepts `?page=` (default 1) and `?limit=` (default 20, capped at 100), returns tasks newest-first with a `pagination` object (`page`, `limit`, `total`, `totalPages`). Full interactive documentation is available at `/api-docs`.
+Task routes require `Authorization: Bearer <token>`, obtained via `/api/auth/login`. `/api/auth/*` routes are rate-limited (100 requests / 15 min per client). Full interactive documentation is available at `/api-docs`.
 
 ## Response Shape
 
 Every endpoint responds with one of two consistent shapes:
-- Success: `{ "success": true, "data": ... }` (list endpoints add a `pagination` object; registration also returns a human-readable `message`)
-- Failure: `{ "success": false, "error": ... }` (validation failures add a `details` array of Zod issues)
+- Success: `{ "success": true, "data": ... }`
+- Failure: `{ "success": false, "error": ..., ["details" | "message"]: ... }`
 
 ## How to Run Locally
 
@@ -69,7 +69,7 @@ npm test           # runs the full suite against an in-memory MongoDB instance
 npm run typecheck  # separate type-check step — see Design Decisions below for why this is separate
 ```
 
-Both run automatically in CI on every push/PR to `main` — see the badge above. Tests live in `src/test/`: `auth.test.ts` covers registration and login (duplicate email, weak password, wrong password, unknown email); `tasks.test.ts` covers authenticated task CRUD, cross-user isolation (another user's task reads as 404 on GET/PUT/DELETE), validation failures, pagination, expired-token rejection and the JSON 404 for unknown routes. A `globalSetup`/`globalTeardown` pair spins up a fresh `mongodb-memory-server` instance once per run, so tests never touch the real Atlas database.
+Both run automatically in CI on every push/PR to `main` — see the badge above. Tests live in `src/test/`: `auth.test.ts` covers registration and login (including negative cases), `tasks.test.ts` covers authenticated task CRUD and rejects unauthenticated/malformed-token requests. A `globalSetup`/`globalTeardown` pair spins up a fresh `mongodb-memory-server` instance once per run, so tests never touch the real Atlas database.
 
 ## API Documentation
 
@@ -78,16 +78,16 @@ Both run automatically in CI on every push/PR to `main` — see the badge above.
 
 ## CI/CD & Deployment
 
-- **`.github/workflows/ci.yml`** runs on every push/PR to `main`: checkout → Node setup → `npm ci` → `npm run typecheck` → `npm test` → `npm run build` (verifying the exact command the Docker image uses). `JWT_SECRET` is provided via a GitHub Actions repository secret, generated separately from any local or production value.
-- **Deployed on Render**, built directly from the repo's `Dockerfile`. Environment variables (`MONGODB_URI`, `JWT_SECRET`, `PORT`, `NODE_ENV=production`) are set in Render's dashboard, never committed — and the production `JWT_SECRET` is distinct from both the local development and CI values.
+- **`.github/workflows/ci.yml`** runs on every push/PR to `main`: checkout → Node setup → `npm ci` → `npm run typecheck` → `npm test`. `JWT_SECRET` is provided via a GitHub Actions repository secret, generated separately from any local or production value.
+- **Deployed on Render**, built directly from the repo's `Dockerfile`. Environment variables (`MONGO_URI`, `JWT_SECRET`, `NODE_ENV=production`) are set in Render's dashboard, never committed — and the production `JWT_SECRET` is distinct from both the local development and CI values.
 - **Monitored via UptimeRobot**, pinging `/health` every 5 minutes — keeps the free-tier instance from cold-starting on a visitor's first request, and alerts if the service genuinely goes down.
 - **`src/utils/seed.ts`** resets the live demo to a known-clean state before recording or sharing: finds and removes a specific, hardcoded demo user (by email) and their tasks if they already exist, then recreates the user with four tasks across varied statuses. Run via `npm run seed`, which requires `CONFIRM_SEED=true` and is intended to be pointed at a separate `.env.production` file — never the default local `.env` — to avoid ever running it against the wrong database by habit.
 
 ## Architecture
 
-Request flow for task routes: **client → `app.ts` (helmet, cors, json parsing) → `protect` (JWT verification) → route-level `validateRequest` (on write operations) → `taskRoutes.ts` → `taskController.ts` → `Task.ts` (Mongoose) → MongoDB**, with Zod validation errors forwarded to `errorHandler.ts` and unexpected errors converted to safe JSON responses in the controllers.
+Request flow for task routes: **client → `app.ts` (helmet, cors, json parsing) → `protect` (JWT verification) → route-level `validateRequest` (on write operations) → `taskRoutes.ts` → `taskController.ts` → `Task.ts` (Mongoose) → MongoDB**, with any thrown error diverted at any point to `errorHandler.ts`. Auth routes follow the same shape minus `protect`, with `express-rate-limit` applied instead.
 
-- **`app.ts`** — builds and fully configures the Express app (trust proxy, helmet, cors, json parsing, routes, Swagger UI, JSON 404 handler, error handler) and exports it directly, with no `.listen()` call and no database connection — this is what makes the app importable and testable via Supertest with zero real network/DB side effects.
+- **`app.ts`** — builds and fully configures the Express app (trust proxy, helmet, cors, json parsing, routes, Swagger UI, error handler) and exports it directly, with no `.listen()` call and no database connection — this is what makes the app importable and testable via Supertest with zero real network/DB side effects.
 - **`server.ts`** — the actual entry point: imports the configured app, connects to the database, and starts listening. Compiled to `dist/server.js` for both local builds and the Docker image's `CMD`.
 - **`config/db.ts`** — the entire database connection lifecycle: URI validation, connection, a `ping` confirmation, and a `readyState` guard against duplicate/concurrent connections.
 - **`config/swagger.ts`** — the OpenAPI definition and the glob pattern telling `swagger-jsdoc` where to find route documentation comments.
@@ -95,11 +95,11 @@ Request flow for task routes: **client → `app.ts` (helmet, cors, json parsing)
 - **`utils/validators.ts`** — Zod schemas plus `validateRequest(schema)`, a single generic middleware-builder reused across every write endpoint.
 - **`utils/seed.ts`** — the demo-data reset script described above.
 - **`middlewares/protect.ts`** — verifies the JWT and attaches a type-checked user payload onto `req.user`.
-- **`middlewares/errorHandler.ts`** — catches errors forwarded from validation middleware and anything unexpected that escapes a route, turning them into consistent, safe JSON responses (no stack traces or driver messages leak to clients).
-- **`controllers/`** — business logic; every task query is scoped to the requesting user. Controllers return typed errors directly (`400` for bad input, `401`/`404`/`409` as appropriate) and generic `500`s for anything unexpected.
+- **`middlewares/errorHandler.ts`** — the single place every error in the app lands, turning it into a consistent, safe JSON response.
+- **`controllers/`** — business logic; every task query is scoped to the requesting user.
 - **`routes/`** — pure wiring, with `@openapi` JSDoc comments above each route.
 - **`test/testSetup.ts`** / **`test/testTeardown.ts`** — Jest global setup/teardown for the in-memory MongoDB instance.
-- **`Dockerfile`** — multi-stage build: the builder stage installs with `npm ci` and compiles TypeScript; the runner stage reinstalls production-only dependencies, runs as the non-root `node` user, and exposes a `HEALTHCHECK` against `/health`. Dependency manifests are copied before source in both stages, so an ordinary code change doesn't force a full dependency reinstall on every rebuild.
+- **`Dockerfile`** — copies dependency manifests and installs before copying source, so dependency layers stay cached across rebuilds that only touch application code; compiles TypeScript inside the image; runs the compiled output.
 
 ## Design Decisions
 
@@ -111,11 +111,10 @@ Request flow for task routes: **client → `app.ts` (helmet, cors, json parsing)
 - **Tests run against an in-memory MongoDB (`mongodb-memory-server`)**, not a shared Atlas test database — fast, isolated, and reproducible without external infrastructure, including inside CI.
 - **`@swc/jest` is used instead of `ts-jest`**, since the project's TypeScript version outpaced `ts-jest`'s supported peer range. `tsc --noEmit` runs as its own script (and its own CI step) to cover the type-checking `@swc/jest` intentionally skips.
 - **Swagger documentation is hand-written in JSDoc comments, not auto-generated from the Zod schemas.** Each route's documented response codes were traced against the actual controller logic rather than assumed.
-- **The Docker build uses `npm ci`, not `npm install`**, in both stages, so builds are reproducible from the lockfile; the runtime image and CI both run Node 24.
+- **The Docker build copies `package*.json` and runs `npm install` before copying the rest of the source**, so an ordinary code change doesn't force a full dependency reinstall on every rebuild.
 - **Every environment (local, CI, production) has its own distinct `JWT_SECRET`**, generated separately, since there's no reason for a CI or dev secret to share sensitivity with the one actually protecting live user sessions.
 - **JWTs are signed with HS256 using a single shared secret, not RS256.** Passwords are hashed via a pre-save hook and excluded from query results by default (`select: false`).
-- **Status codes are split by failure type**: `400` client-caused bad input, `401` authentication failures, `404` a well-formed ID that doesn't match (or isn't owned by the caller), `409` duplicate email on registration, `500` unexpected server-side failures.
-- **`GET /api/tasks` is paginated** (`page`/`limit`, capped at 100 per page, newest first) rather than returning an unbounded array, so response size stays predictable as a user's task list grows.
+- **Status codes are split by failure type**: `400` client-caused bad input, `401` authentication failures, `404` a well-formed ID that doesn't match (or isn't owned by the caller), `500` unexpected server-side failures.
 
 ## Known Issues
 

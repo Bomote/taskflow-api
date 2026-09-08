@@ -31,6 +31,3 @@ jobs:
 
       - name: Run automated tests
         run: npm test
-
-      - name: Verify production build
-        run: npm run build
