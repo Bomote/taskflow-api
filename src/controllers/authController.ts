@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { User } from '../models/User.ts';
+import { sendError } from '../utils/errorCodes.ts';
 
 const rawJwtSecret = process.env.JWT_SECRET;
 
@@ -11,9 +12,6 @@ if (!rawJwtSecret) {
 
 const jwtSecret: string = rawJwtSecret;
 
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : 'Unknown error';
-}
 
 export async function registerUser(req: Request, res: Response): Promise<Response> {
   const { name, email, password } = req.body;
@@ -22,7 +20,7 @@ export async function registerUser(req: Request, res: Response): Promise<Respons
     const existingUser = await User.findOne({ email });
 
     if (existingUser) {
-      return res.status(400).json({ success: false, message: 'Email already registered' });
+      return sendError(res, 'EMAIL_ALREADY_REGISTERED');
     }
 
     const createdUser = await User.create({ name, email, password });
@@ -32,7 +30,17 @@ export async function registerUser(req: Request, res: Response): Promise<Respons
       message: `User ${createdUser.name} created`,
     });
   } catch (error) {
-    return res.status(400).json({ success: false, error: getErrorMessage(error) });
+    if (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      error.code === 11000
+    ) {
+      console.error(error);
+      return sendError(res, 'EMAIL_ALREADY_REGISTERED');
+    }
+    console.error(error)
+    return sendError(res, 'INTERNAL_ERROR');
   }
 }
 
@@ -43,13 +51,13 @@ export async function loginUser(req: Request, res: Response): Promise<Response> 
     const existingUser = await User.findOne({ email }).select('+password');
 
     if (!existingUser) {
-      return res.status(400).json({ success: false, message: 'Invalid credentials' });
+      return sendError(res, 'INVALID_CREDENTIALS');
     }
 
     const isMatch = await bcrypt.compare(password, existingUser.password);
 
     if (!isMatch) {
-      return res.status(400).json({ success: false, message: 'Invalid credentials' });
+      return sendError(res, 'INVALID_CREDENTIALS');
     }
 
     const token = jwt.sign({ id: existingUser._id }, jwtSecret, {
@@ -62,6 +70,7 @@ export async function loginUser(req: Request, res: Response): Promise<Response> 
       data: { token },
     });
   } catch (error) {
-    return res.status(500).json({ success: false, error: getErrorMessage(error) });
+    console.error(error)
+    return sendError(res, 'INTERNAL_ERROR');
   }
 }
