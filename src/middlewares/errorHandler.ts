@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
+import { sendError } from '../utils/errorCodes.ts';
 
 export function errorHandler(
   err: unknown,
@@ -8,16 +9,13 @@ export function errorHandler(
   next: NextFunction
 ) {
   if (err instanceof ZodError) {
-    return res.status(400).json({
-      success: false,
-      error: 'Validation Failed',
-      details: err.issues,
-    });
+    const details = err.issues.map((issue) => ({
+      field: issue.path.join('.'),
+      message: issue.message,
+    }));
+    return sendError(res, 'VALIDATION_ERROR', details);
   }
 
   console.error(err);
-  return res.status(500).json({
-    success: false,
-    error: 'Internal Server Error',
-  });
+  return sendError(res, 'INTERNAL_ERROR');
 }

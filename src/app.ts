@@ -6,6 +6,7 @@ import taskRouter from './routes/taskRoutes.ts';
 import authRouter from './routes/authRoutes.ts';
 import { errorHandler } from './middlewares/errorHandler.ts';
 import { swaggerUiServe, swaggerUiSetup } from './config/swagger.ts';
+import { sendError } from './utils/errorCodes.ts';
 
 const app = express();
 
@@ -29,7 +30,7 @@ app.use('/api/tasks', taskRouter);
 app.use('/api/auth', authLimiter, authRouter);
 app.use('/api-docs', swaggerUiServe, swaggerUiSetup);
 app.use((req, res) => {
-  res.status(404).json({ success: false, message: 'Route not found' });
+  return sendError(res, 'ROUTE_NOT_FOUND');
 });
 app.use(errorHandler);
 
