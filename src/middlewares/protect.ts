@@ -21,26 +21,26 @@ export function protect(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.headers['authorization'];
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return sendError(res, 'UNAUTHORIZED')
+    return sendError(res, 'UNAUTHORIZED');
   }
 
   const token = authHeader.split(' ')[1];
 
   if (!token) {
-    return sendError(res, 'UNAUTHORIZED')
+    return sendError(res, 'UNAUTHORIZED');
   }
 
   try {
-    const decoded = jwt.verify(token, jwtSecret);
+    const decoded = jwt.verify(token, jwtSecret, { algorithms: ['HS256'] });
 
     if (!isAuthenticatedUser(decoded)) {
-      return sendError(res, 'UNAUTHORIZED')
+      return sendError(res, 'UNAUTHORIZED');
     }
 
     req.user = decoded;
     return next();
   } catch (error) {
-    console.log(error)
-    return sendError(res, 'UNAUTHORIZED')
+    console.error(error);
+    return sendError(res, 'UNAUTHORIZED');
   }
 }
