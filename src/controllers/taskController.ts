@@ -2,10 +2,6 @@ import type { Request, Response } from 'express';
 import { Task } from '../models/Task.ts';
 import { sendError } from '../utils/errorCodes.ts';
 
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : 'Unknown error';
-}
-
 const OBJECT_ID_REGEX = /^[0-9a-fA-F]{24}$/;
 
 function isValidObjectId(id: unknown): id is string {
@@ -83,8 +79,8 @@ export async function updateTask(req: Request, res: Response): Promise<Response>
     return sendError(res, 'INVALID_ID')
   }
 
-  if(!req.body.title && !req.body.desc && !req.body.status){
-    return sendError(res, 'EMPTY_UPDATE')
+  if (Object.keys(req.body).length === 0) {
+    return sendError(res, 'EMPTY_UPDATE');
   }
 
   try {
