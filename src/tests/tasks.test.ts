@@ -76,3 +76,15 @@ test('rejects POST /api/tasks with a malformed token', async () => {
   expect(response.status).toBe(401);
   expect(response.body.success).toBe(false);
 });
+
+test('reject PUT /api/tasks with an empty body ', async () => {
+  const allTasks = await request(app).get('/api/tasks/').set('Authorization', `Bearer ${token}`)
+  const taskID = allTasks.body.data[0]._id
+  const response = await request(app)
+    .put(`/api/tasks/${taskID}`)
+    .set('Authorization', `Bearer ${token}`)
+    .send({});
+
+  expect(response.status).toBe(204);
+  expect(response.body.success).toBe(true);
+});
