@@ -83,6 +83,10 @@ export async function updateTask(req: Request, res: Response): Promise<Response>
     return sendError(res, 'INVALID_ID')
   }
 
+  if(!req.body.title && !req.body.desc && !req.body.status){
+    return sendError(res, 'EMPTY_UPDATE')
+  }
+
   try {
     const updatedTask = await Task.findOneAndUpdate(
       { _id: taskId, userId: req.user.id },

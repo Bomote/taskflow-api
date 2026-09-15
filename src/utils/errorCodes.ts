@@ -9,7 +9,7 @@ export const ERR_CODES = {
   UNAUTHORIZED: { status: 401, message: 'Invalid or missing token' },
   ROUTE_NOT_FOUND: { status: 404, message: 'Unknown route' },
   INTERNAL_ERROR: { status: 500, message: 'Unexpected internal error' },
-  EMPTY_UPDATE: {status: 204, message: 'Empty update body'}
+  EMPTY_UPDATE: { status: 400, message: 'Update body cannot be empty' },
 } as const;
 
 type ErrorKey = keyof typeof ERR_CODES;

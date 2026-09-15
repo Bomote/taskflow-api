@@ -88,7 +88,7 @@ test('rejects PUT /api/tasks/:id with an empty body', async () => {
     .set('Authorization', `Bearer ${token}`)
     .send({});
 
-  expect(response.status).toBe(204);
+  expect(response.status).toBe(400);
   expect(response.body.success).toBe(false);
   expect(response.body.error.code).toBe('EMPTY_UPDATE');
 });
