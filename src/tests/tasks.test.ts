@@ -92,3 +92,13 @@ test('rejects PUT /api/tasks/:id with an empty body', async () => {
   expect(response.body.success).toBe(false);
   expect(response.body.error.code).toBe('EMPTY_UPDATE');
 });
+
+test('rejects a limit above the allowed maximum', async () => {
+  const response = await request(app)
+  .get('/api/tasks')
+  .set('Authorization', `Bearer ${token}`)
+  .query({page: '1', limit: '20'})
+
+  expect(response.status).toBe(400);
+  expect(response.body.success).toBe(false);
+})
