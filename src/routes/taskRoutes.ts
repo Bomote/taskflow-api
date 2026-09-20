@@ -6,7 +6,7 @@ import {
   getTasks,
   updateTask,
 } from '../controllers/taskController.ts';
-import { createTaskSchema, updateTaskSchema, validateRequest } from '../utils/validators.ts';
+import { createTaskSchema, paginationQuerySchema, updateTaskSchema, validateQuery, validateRequest } from '../utils/validators.ts';
 import { protect } from '../middlewares/protect.ts';
 
 const taskRouter = Router();
@@ -15,13 +15,27 @@ const taskRouter = Router();
  * @openapi
  * /api/tasks:
  *   get:
- *     summary: List the caller's tasks
+ *     summary: List the caller's tasks (paginated)
  *     tags: [Tasks]
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 15
+ *           default: 10
  *     responses:
  *       200:
- *         description: A list of the caller's tasks
+ *         description: A paginated list of the caller's tasks
  *         content:
  *           application/json:
  *             schema:
@@ -33,10 +47,23 @@ const taskRouter = Router();
  *                   type: array
  *                   items:
  *                     type: object
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     page:
+ *                       type: integer
+ *                     limit:
+ *                       type: integer
+ *                     total:
+ *                       type: integer
+ *                     totalPages:
+ *                       type: integer
+ *       400:
+ *         description: Invalid page or limit
  *       401:
  *         description: Missing or invalid token
  */
-taskRouter.get('/', protect, getTasks);
+taskRouter.get('/', protect, validateQuery(paginationQuerySchema), getTasks);
 
 /**
  * @openapi

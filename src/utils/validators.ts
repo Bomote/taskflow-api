@@ -39,3 +39,14 @@ export function validateRequest(schema: z.ZodSchema) {
     }
   };
 }
+
+export function validateQuery<T extends z.ZodType<{ page: number; limit: number }>>(schema: T) {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      req.pagination = await schema.parseAsync(req.query);
+      next();
+    } catch (error) {
+      next(error);
+    }
+  };
+}
