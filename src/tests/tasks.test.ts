@@ -169,3 +169,78 @@ test('accepts the maximum allowed limit', async () => {
   expect(response.body.success).toBe(true);
   expect(response.body.pagination.limit).toBe(15);
 });
+
+test('uses documented defaults when page/limit are omitted', async () => {
+  const response = await request(app).get('/api/tasks').set('Authorization', `Bearer ${token}`);
+
+  expect(response.status).toBe(200);
+  expect(response.body.pagination.page).toBe(1);
+  expect(response.body.pagination.limit).toBe(10);
+});
+
+test.each([
+  ['zero page', { page: 0 }],
+  ['negative page', { page: -1 }],
+  ['decimal limit', { limit: 2.5 }],
+  ['non-numeric text', { limit: 'abc' }],
+  ['unsafe integer', { limit: '99999999999999999999' }],
+])('rejects invalid pagination input: %s', async (_label, query) => {
+  const response = await request(app)
+    .get('/api/tasks')
+    .set('Authorization', `Bearer ${token}`)
+    .query(query);
+
+  expect(response.status).toBe(400);
+  expect(response.body.success).toBe(false);
+});
+
+test('rejects an array value for limit', async () => {
+  const response = await request(app)
+    .get('/api/tasks')
+    .set('Authorization', `Bearer ${token}`)
+    .query('limit=5&limit=10'); // raw query string, forces a real array
+
+  expect(response.status).toBe(400);
+});
+
+test('returns an empty list with truthful metadata for a page beyond the end', async () => {
+  const response = await request(app)
+    .get('/api/tasks')
+    .set('Authorization', `Bearer ${token}`)
+    .query({ page: 999, limit: 10 });
+
+  expect(response.status).toBe(200);
+  expect(response.body.data).toEqual([]);
+  expect(response.body.pagination.page).toBe(999);
+  expect(response.body.pagination.total).toBeGreaterThanOrEqual(0);
+  expect(response.body.pagination.totalPages).toBeLessThan(999);
+});
+
+
+test('pagination totals only reflect the authenticated user\'s own tasks', async () => {
+  const otherUser = {
+    name: 'Other User',
+    email: 'other.pagination@example.com',
+    password: 'TestDataPass!123',
+  };
+  await request(app).post('/api/auth/register').send(otherUser);
+  const otherLogin = await request(app).post('/api/auth/login').send({
+    email: otherUser.email,
+    password: otherUser.password,
+  });
+  const otherToken = otherLogin.body.data.token;
+
+  await request(app)
+    .post('/api/tasks')
+    .set('Authorization', `Bearer ${otherToken}`)
+    .send({ title: 'Other user task', status: 'pending' });
+
+  const myTasks = await request(app).get('/api/tasks').set('Authorization', `Bearer ${token}`);
+  const theirTasks = await request(app).get('/api/tasks').set('Authorization', `Bearer ${otherToken}`);
+
+  const myIds = myTasks.body.data.map((t: { _id: string }) => t._id);
+  const theirIds = theirTasks.body.data.map((t: { _id: string }) => t._id);
+
+  expect(myIds.some((id: string) => theirIds.includes(id))).toBe(false);
+  expect(theirTasks.body.pagination.total).toBe(1);
+});
