@@ -6,10 +6,18 @@ import { User } from '../models/User.ts';
 import { Task } from '../models/Task.ts';
 
 let token: string;
+let newToken: string;
+let newTaskId: string;
 
 const validUser = {
   name: 'Jane Task-Tester',
   email: 'jane.tasks@example.com',
+  password: 'TestDataPass!123',
+};
+
+const secondUser = {
+  name: 'John Task-Tester',
+  email: 'john.tasks@example.com',
   password: 'TestDataPass!123',
 };
 
@@ -19,22 +27,35 @@ const validTask = {
   status: 'pending',
 };
 
+const secondTask = {
+  title: 'New Task 2',
+  description: 'creating another task',
+  status: 'pending',
+};
+
 beforeAll(async () => {
   await connectDB();
 
   await request(app).post('/api/auth/register').send(validUser);
-
   const response = await request(app).post('/api/auth/login').send({
     email: validUser.email,
     password: validUser.password,
   });
-
   token = response.body.data.token;
+
+  await request(app).post('/api/auth/register').send(secondUser);
+  const secondResponse = await request(app).post('/api/auth/login').send({
+    email: secondUser.email,
+    password: secondUser.password,
+  });
+  newToken = secondResponse.body.data.token;
 });
 
 afterAll(async () => {
   await mongoose.disconnect();
 });
+
+// --- Core CRUD + auth gating ---
 
 test('creates a task with a valid token', async () => {
   const response = await request(app)
@@ -80,9 +101,7 @@ test('rejects POST /api/tasks with a malformed token', async () => {
 });
 
 test('rejects PUT /api/tasks/:id with an empty body', async () => {
-  const allTasks = await request(app)
-    .get('/api/tasks')
-    .set('Authorization', `Bearer ${token}`);
+  const allTasks = await request(app).get('/api/tasks').set('Authorization', `Bearer ${token}`);
   const taskId = allTasks.body.data[0]._id;
 
   const response = await request(app)
@@ -95,15 +114,127 @@ test('rejects PUT /api/tasks/:id with an empty body', async () => {
   expect(response.body.error.code).toBe('EMPTY_UPDATE');
 });
 
+// --- Cross-user ownership ---
+
+test('creates a second task to use as the ownership target', async () => {
+  const response = await request(app)
+    .post('/api/tasks')
+    .set('Authorization', `Bearer ${token}`)
+    .send(secondTask);
+
+  newTaskId = response.body.data._id;
+
+  expect(response.status).toBe(201);
+  expect(response.body.success).toBe(true);
+  expect(response.body.data.title).toBe(secondTask.title);
+});
+
+test('rejects fetching another user\'s task', async () => {
+  const response = await request(app)
+    .get(`/api/tasks/${newTaskId}`)
+    .set('Authorization', `Bearer ${newToken}`);
+
+  expect(response.status).toBe(404);
+  expect(response.body.success).toBe(false);
+});
+
+test('rejects updating another user\'s task', async () => {
+  const response = await request(app)
+    .put(`/api/tasks/${newTaskId}`)
+    .set('Authorization', `Bearer ${newToken}`)
+    .send({ title: 'New Title' });
+
+  expect(response.status).toBe(404);
+  expect(response.body.success).toBe(false);
+});
+
+test('rejects deleting another user\'s task', async () => {
+  const response = await request(app)
+    .delete(`/api/tasks/${newTaskId}`)
+    .set('Authorization', `Bearer ${newToken}`);
+
+  expect(response.status).toBe(404);
+  expect(response.body.success).toBe(false);
+});
+
+test('confirms the task was untouched by the blocked update and delete attempts', async () => {
+  const response = await request(app)
+    .get(`/api/tasks/${newTaskId}`)
+    .set('Authorization', `Bearer ${token}`);
+
+  expect(response.status).toBe(200);
+  expect(response.body.success).toBe(true);
+  expect(response.body.data.title).toBe(secondTask.title);
+});
+
+// --- Pagination ---
+
 test('rejects a limit above the allowed maximum', async () => {
   const response = await request(app)
-  .get('/api/tasks')
-  .set('Authorization', `Bearer ${token}`)
-  .query({page: '1', limit: '20'})
+    .get('/api/tasks')
+    .set('Authorization', `Bearer ${token}`)
+    .query({ page: '1', limit: '20' });
 
   expect(response.status).toBe(400);
   expect(response.body.success).toBe(false);
-})
+});
+
+test('accepts the maximum allowed limit', async () => {
+  const response = await request(app)
+    .get('/api/tasks')
+    .set('Authorization', `Bearer ${token}`)
+    .query({ page: 1, limit: 15 });
+
+  expect(response.status).toBe(200);
+  expect(response.body.success).toBe(true);
+  expect(response.body.pagination.limit).toBe(15);
+});
+
+test('uses documented defaults when page/limit are omitted', async () => {
+  const response = await request(app).get('/api/tasks').set('Authorization', `Bearer ${token}`);
+
+  expect(response.status).toBe(200);
+  expect(response.body.pagination.page).toBe(1);
+  expect(response.body.pagination.limit).toBe(10);
+});
+
+test.each([
+  ['zero page', { page: 0 }],
+  ['negative page', { page: -1 }],
+  ['decimal limit', { limit: 2.5 }],
+  ['non-numeric text', { limit: 'abc' }],
+  ['unsafe integer', { limit: '99999999999999999999' }],
+])('rejects invalid pagination input: %s', async (_label, query) => {
+  const response = await request(app)
+    .get('/api/tasks')
+    .set('Authorization', `Bearer ${token}`)
+    .query(query);
+
+  expect(response.status).toBe(400);
+  expect(response.body.success).toBe(false);
+});
+
+test('rejects an array value for limit', async () => {
+  const response = await request(app)
+    .get('/api/tasks')
+    .set('Authorization', `Bearer ${token}`)
+    .query('limit=5&limit=10');
+
+  expect(response.status).toBe(400);
+});
+
+test('returns an empty list with truthful metadata for a page beyond the end', async () => {
+  const response = await request(app)
+    .get('/api/tasks')
+    .set('Authorization', `Bearer ${token}`)
+    .query({ page: 999, limit: 10 });
+
+  expect(response.status).toBe(200);
+  expect(response.body.data).toEqual([]);
+  expect(response.body.pagination.page).toBe(999);
+  expect(response.body.pagination.total).toBeGreaterThanOrEqual(0);
+  expect(response.body.pagination.totalPages).toBeLessThan(999);
+});
 
 test('pagination correctly slices results across pages', async () => {
   const before = await request(app).get('/api/tasks').set('Authorization', `Bearer ${token}`);
@@ -159,13 +290,13 @@ test('pagination correctly slices results across pages', async () => {
   expect(overlap).toHaveLength(0);
 });
 
-test('accepts the maximum allowed limit', async () => {
-  const response = await request(app)
-    .get('/api/tasks')
-    .set('Authorization', `Bearer ${token}`)
-    .query({ page: 1, limit: 15 });
+test('pagination totals only reflect the authenticated user\'s own tasks', async () => {
+  const theirTasks = await request(app).get('/api/tasks').set('Authorization', `Bearer ${newToken}`);
 
-  expect(response.status).toBe(200);
-  expect(response.body.success).toBe(true);
-  expect(response.body.pagination.limit).toBe(15);
+  const myTasks = await request(app).get('/api/tasks').set('Authorization', `Bearer ${token}`);
+
+  const myIds = myTasks.body.data.map((t: { _id: string }) => t._id);
+  const theirIds = theirTasks.body.data.map((t: { _id: string }) => t._id);
+
+  expect(myIds.some((id: string) => theirIds.includes(id))).toBe(false);
 });
