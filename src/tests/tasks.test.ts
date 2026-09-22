@@ -6,6 +6,7 @@ import { User } from '../models/User.ts';
 import { Task } from '../models/Task.ts';
 
 let token: string;
+let taskId: string;
 let newToken: string;
 let newTaskId: string;
 
@@ -63,6 +64,8 @@ test('creates a task with a valid token', async () => {
     .set('Authorization', `Bearer ${token}`)
     .send(validTask);
 
+  taskId = response.body.data._id;
+
   expect(response.status).toBe(201);
   expect(response.body.success).toBe(true);
   expect(response.body.data.title).toBe(validTask.title);
@@ -74,6 +77,34 @@ test('fetches tasks with a valid token', async () => {
   expect(response.status).toBe(200);
   expect(response.body.success).toBe(true);
   expect(Array.isArray(response.body.data)).toBe(true);
+});
+
+test('fetches a single owned task', async () => {
+  const response = await request(app)
+    .get(`/api/tasks/${taskId}`)
+    .set('Authorization', `Bearer ${token}`);
+
+  expect(response.status).toBe(200);
+  expect(response.body.success).toBe(true);
+  expect(response.body.data._id).toBe(taskId);
+  expect(response.body.data.title).toBe(validTask.title);
+});
+
+test('updates an owned task and persists the change', async () => {
+  const updateResponse = await request(app)
+    .put(`/api/tasks/${taskId}`)
+    .set('Authorization', `Bearer ${token}`)
+    .send({ status: 'completed' });
+
+  expect(updateResponse.status).toBe(200);
+  expect(updateResponse.body.success).toBe(true);
+  expect(updateResponse.body.data.status).toBe('completed');
+
+  const followUp = await request(app)
+    .get(`/api/tasks/${taskId}`)
+    .set('Authorization', `Bearer ${token}`);
+
+  expect(followUp.body.data.status).toBe('completed');
 });
 
 test('rejects GET /api/tasks with no auth header', async () => {
@@ -101,9 +132,6 @@ test('rejects POST /api/tasks with a malformed token', async () => {
 });
 
 test('rejects PUT /api/tasks/:id with an empty body', async () => {
-  const allTasks = await request(app).get('/api/tasks').set('Authorization', `Bearer ${token}`);
-  const taskId = allTasks.body.data[0]._id;
-
   const response = await request(app)
     .put(`/api/tasks/${taskId}`)
     .set('Authorization', `Bearer ${token}`)
@@ -114,6 +142,20 @@ test('rejects PUT /api/tasks/:id with an empty body', async () => {
   expect(response.body.error.code).toBe('EMPTY_UPDATE');
 });
 
+test('deletes an owned task', async () => {
+  const deleteResponse = await request(app)
+    .delete(`/api/tasks/${taskId}`)
+    .set('Authorization', `Bearer ${token}`);
+
+  expect(deleteResponse.status).toBe(200);
+  expect(deleteResponse.body.success).toBe(true);
+
+  const followUp = await request(app)
+    .get(`/api/tasks/${taskId}`)
+    .set('Authorization', `Bearer ${token}`);
+
+  expect(followUp.status).toBe(404);
+});
 // --- Cross-user ownership ---
 
 test('creates a second task to use as the ownership target', async () => {
