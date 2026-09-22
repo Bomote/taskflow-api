@@ -114,6 +114,16 @@ test('rejects GET /api/tasks with no auth header', async () => {
   expect(response.body.success).toBe(false);
 });
 
+test('rejects a malformed task ID', async () => {
+  const response = await request(app)
+    .get('/api/tasks/not-a-real-id')
+    .set('Authorization', `Bearer ${token}`);
+
+  expect(response.status).toBe(400);
+  expect(response.body.success).toBe(false);
+  expect(response.body.error.code).toBe('INVALID_ID');
+});
+
 test('rejects POST /api/tasks with no auth header', async () => {
   const response = await request(app).post('/api/tasks').send(validTask);
 
