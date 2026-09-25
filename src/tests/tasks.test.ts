@@ -4,6 +4,7 @@ import app from '../app.ts';
 import { connectDB } from '../config/db.ts';
 import { User } from '../models/User.ts';
 import { Task } from '../models/Task.ts';
+import jwt from 'jsonwebtoken';
 
 let token: string;
 let taskId: string;
@@ -139,6 +140,21 @@ test('rejects POST /api/tasks with a malformed token', async () => {
 
   expect(response.status).toBe(401);
   expect(response.body.success).toBe(false);
+});
+
+test('rejects an expired token', async () => {
+  const expiredToken = jwt.sign({ id: 'someuserid' }, process.env.JWT_SECRET!, {
+    algorithm: 'HS256',
+    expiresIn: '-1s',
+  });
+
+  const response = await request(app)
+    .get('/api/tasks')
+    .set('Authorization', `Bearer ${expiredToken}`);
+
+  expect(response.status).toBe(401);
+  expect(response.body.success).toBe(false);
+  expect(response.body.error.code).toBe('UNAUTHORIZED');
 });
 
 test('rejects PUT /api/tasks/:id with an empty body', async () => {
