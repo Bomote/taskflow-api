@@ -57,7 +57,7 @@ afterAll(async () => {
   await mongoose.disconnect();
 });
 
-// --- Core CRUD + auth gating ---
+// --- Core CRUD happy paths ---
 
 test('creates a task with a valid token', async () => {
   const response = await request(app)
@@ -108,21 +108,28 @@ test('updates an owned task and persists the change', async () => {
   expect(followUp.body.data.status).toBe('completed');
 });
 
+test('deletes an owned task', async () => {
+  const deleteResponse = await request(app)
+    .delete(`/api/tasks/${taskId}`)
+    .set('Authorization', `Bearer ${token}`);
+
+  expect(deleteResponse.status).toBe(200);
+  expect(deleteResponse.body.success).toBe(true);
+
+  const followUp = await request(app)
+    .get(`/api/tasks/${taskId}`)
+    .set('Authorization', `Bearer ${token}`);
+
+  expect(followUp.status).toBe(404);
+});
+
+// --- Auth edge cases ---
+
 test('rejects GET /api/tasks with no auth header', async () => {
   const response = await request(app).get('/api/tasks');
 
   expect(response.status).toBe(401);
   expect(response.body.success).toBe(false);
-});
-
-test('rejects a malformed task ID', async () => {
-  const response = await request(app)
-    .get('/api/tasks/not-a-real-id')
-    .set('Authorization', `Bearer ${token}`);
-
-  expect(response.status).toBe(400);
-  expect(response.body.success).toBe(false);
-  expect(response.body.error.code).toBe('INVALID_ID');
 });
 
 test('rejects POST /api/tasks with no auth header', async () => {
@@ -157,6 +164,18 @@ test('rejects an expired token', async () => {
   expect(response.body.error.code).toBe('UNAUTHORIZED');
 });
 
+// --- Validation edge cases ---
+
+test('rejects a malformed task ID', async () => {
+  const response = await request(app)
+    .get('/api/tasks/not-a-real-id')
+    .set('Authorization', `Bearer ${token}`);
+
+  expect(response.status).toBe(400);
+  expect(response.body.success).toBe(false);
+  expect(response.body.error.code).toBe('INVALID_ID');
+});
+
 test('rejects PUT /api/tasks/:id with an empty body', async () => {
   const response = await request(app)
     .put(`/api/tasks/${taskId}`)
@@ -166,71 +185,6 @@ test('rejects PUT /api/tasks/:id with an empty body', async () => {
   expect(response.status).toBe(400);
   expect(response.body.success).toBe(false);
   expect(response.body.error.code).toBe('EMPTY_UPDATE');
-});
-
-test('deletes an owned task', async () => {
-  const deleteResponse = await request(app)
-    .delete(`/api/tasks/${taskId}`)
-    .set('Authorization', `Bearer ${token}`);
-
-  expect(deleteResponse.status).toBe(200);
-  expect(deleteResponse.body.success).toBe(true);
-
-  const followUp = await request(app)
-    .get(`/api/tasks/${taskId}`)
-    .set('Authorization', `Bearer ${token}`);
-
-  expect(followUp.status).toBe(404);
-});
-// --- Cross-user ownership ---
-test('creates a second task to use as the ownership target', async () => {
-  const response = await request(app)
-    .post('/api/tasks')
-    .set('Authorization', `Bearer ${token}`)
-    .send(secondTask);
-
-  newTaskId = response.body.data._id;
-
-  expect(response.status).toBe(201);
-  expect(response.body.success).toBe(true);
-  expect(response.body.data.title).toBe(secondTask.title);
-});
-
-test('ignores a client supplied userId when creating a task', async () => {
-  const maliciousUserId = new mongoose.Types.ObjectId().toString()
-
-  const response = await request(app)
-    .post('/api/tasks')
-    .set('Authorization', `Bearer ${token}`)
-    .send({
-      title: 'Mass assignment test task',
-      description: 'Attempting to set userId directly',
-      status: 'pending',
-      userId: maliciousUserId
-    });
-
-  expect(response.status).toBe(201);
-  expect(response.body.success).toBe(true);
-  expect(response.body.data.userId).not.toBe(maliciousUserId);
-});
-
-test('rejects fetching another user\'s task', async () => {
-  const response = await request(app)
-    .get(`/api/tasks/${newTaskId}`)
-    .set('Authorization', `Bearer ${newToken}`);
-
-  expect(response.status).toBe(404);
-  expect(response.body.success).toBe(false);
-});
-
-test('rejects updating another user\'s task', async () => {
-  const response = await request(app)
-    .put(`/api/tasks/${newTaskId}`)
-    .set('Authorization', `Bearer ${newToken}`)
-    .send({ title: 'New Title' });
-
-  expect(response.status).toBe(404);
-  expect(response.body.success).toBe(false);
 });
 
 test('rejects an invalid status value on update, with no saved change', async () => {
@@ -248,6 +202,28 @@ test('rejects an invalid status value on update, with no saved change', async ()
     .set('Authorization', `Bearer ${token}`);
 
   expect(followUp.body.data.status).toBe('pending');
+});
+
+// TODO (Step 5 continued): unknown/irrelevant fields, oversized body, empty strings
+
+// --- Mass-assignment / ownership integrity ---
+
+test('ignores a client supplied userId when creating a task', async () => {
+  const maliciousUserId = new mongoose.Types.ObjectId().toString();
+
+  const response = await request(app)
+    .post('/api/tasks')
+    .set('Authorization', `Bearer ${token}`)
+    .send({
+      title: 'Mass assignment test task',
+      description: 'Attempting to set userId directly',
+      status: 'pending',
+      userId: maliciousUserId,
+    });
+
+  expect(response.status).toBe(201);
+  expect(response.body.success).toBe(true);
+  expect(response.body.data.userId).not.toBe(maliciousUserId);
 });
 
 test('ignores a client-supplied userId and _id when updating a task', async () => {
@@ -274,6 +250,42 @@ test('ignores a client-supplied userId and _id when updating a task', async () =
   expect(response.body.data.userId).not.toBe(maliciousUserId);
   expect(response.body.data._id).not.toBe(maliciousId);
   expect(response.body.data._id).toBe(targetId);
+});
+
+// TODO (Step 5 continued): forced internal error → confirm no leaked detail
+
+// --- Cross-user ownership ---
+
+test('creates a second task to use as the ownership target', async () => {
+  const response = await request(app)
+    .post('/api/tasks')
+    .set('Authorization', `Bearer ${token}`)
+    .send(secondTask);
+
+  newTaskId = response.body.data._id;
+
+  expect(response.status).toBe(201);
+  expect(response.body.success).toBe(true);
+  expect(response.body.data.title).toBe(secondTask.title);
+});
+
+test('rejects fetching another user\'s task', async () => {
+  const response = await request(app)
+    .get(`/api/tasks/${newTaskId}`)
+    .set('Authorization', `Bearer ${newToken}`);
+
+  expect(response.status).toBe(404);
+  expect(response.body.success).toBe(false);
+});
+
+test('rejects updating another user\'s task', async () => {
+  const response = await request(app)
+    .put(`/api/tasks/${newTaskId}`)
+    .set('Authorization', `Bearer ${newToken}`)
+    .send({ title: 'New Title' });
+
+  expect(response.status).toBe(404);
+  expect(response.body.success).toBe(false);
 });
 
 test('rejects deleting another user\'s task', async () => {
@@ -367,7 +379,7 @@ test('returns an empty list with truthful metadata for a page beyond the end', a
 test('pagination correctly slices results across pages', async () => {
   const before = await request(app).get('/api/tasks').set('Authorization', `Bearer ${token}`);
   const initialTotal = before.body.pagination.total;
-  console.log(initialTotal)
+
   const limit = 5;
   const tasksToCreate = limit + 3;
 
@@ -420,7 +432,6 @@ test('pagination correctly slices results across pages', async () => {
 
 test('pagination totals only reflect the authenticated user\'s own tasks', async () => {
   const theirTasks = await request(app).get('/api/tasks').set('Authorization', `Bearer ${newToken}`);
-
   const myTasks = await request(app).get('/api/tasks').set('Authorization', `Bearer ${token}`);
 
   const myIds = myTasks.body.data.map((t: { _id: string }) => t._id);
