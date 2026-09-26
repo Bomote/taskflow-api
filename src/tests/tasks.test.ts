@@ -183,7 +183,6 @@ test('deletes an owned task', async () => {
   expect(followUp.status).toBe(404);
 });
 // --- Cross-user ownership ---
-
 test('creates a second task to use as the ownership target', async () => {
   const response = await request(app)
     .post('/api/tasks')
@@ -195,6 +194,24 @@ test('creates a second task to use as the ownership target', async () => {
   expect(response.status).toBe(201);
   expect(response.body.success).toBe(true);
   expect(response.body.data.title).toBe(secondTask.title);
+});
+
+test('ignores a client supplied userId when creating a task', async () => {
+  const maliciousUserId = new mongoose.Types.ObjectId().toString()
+
+  const response = await request(app)
+    .post('/api/tasks')
+    .set('Authorization', `Bearer ${token}`)
+    .send({
+      title: 'Mass assignment test task',
+      description: 'Attempting to set userId directly',
+      status: 'pending',
+      userId: maliciousUserId
+    });
+
+  expect(response.status).toBe(201);
+  expect(response.body.success).toBe(true);
+  expect(response.body.data.userId).not.toBe(maliciousUserId);
 });
 
 test('rejects fetching another user\'s task', async () => {
