@@ -233,6 +233,23 @@ test('rejects updating another user\'s task', async () => {
   expect(response.body.success).toBe(false);
 });
 
+test('rejects an invalid status value on update, with no saved change', async () => {
+  const response = await request(app)
+    .put(`/api/tasks/${newTaskId}`)
+    .set('Authorization', `Bearer ${token}`)
+    .send({ status: 'ongoing' });
+
+  expect(response.status).toBe(400);
+  expect(response.body.success).toBe(false);
+  expect(response.body.error.code).toBe('VALIDATION_ERROR');
+
+  const followUp = await request(app)
+    .get(`/api/tasks/${newTaskId}`)
+    .set('Authorization', `Bearer ${token}`);
+
+  expect(followUp.body.data.status).toBe('pending');
+});
+
 test('ignores a client-supplied userId and _id when updating a task', async () => {
   const setup = await request(app)
     .post('/api/tasks')
