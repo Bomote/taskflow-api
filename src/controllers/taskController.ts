@@ -101,9 +101,18 @@ export async function updateTask(req: Request, res: Response): Promise<Response>
   }
 
   try {
+    const { title, description, status } = req.body;
+    const allowedUpdates = Object.fromEntries(
+      Object.entries({ title, description, status }).filter(([, value]) => value !== undefined)
+    );
+
+    if (Object.keys(allowedUpdates).length === 0) {
+      return sendError(res, 'EMPTY_UPDATE');
+    }
+
     const updatedTask = await Task.findOneAndUpdate(
       { _id: taskId, userId: req.user.id },
-      req.body,
+      allowedUpdates,
       { returnDocument: 'after', runValidators: true }
     );
 

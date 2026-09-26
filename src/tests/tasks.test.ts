@@ -233,6 +233,32 @@ test('rejects updating another user\'s task', async () => {
   expect(response.body.success).toBe(false);
 });
 
+test('ignores a client-supplied userId and _id when updating a task', async () => {
+  const setup = await request(app)
+    .post('/api/tasks')
+    .set('Authorization', `Bearer ${token}`)
+    .send({ title: 'Mass assignment update target', status: 'pending' });
+  const targetId = setup.body.data._id;
+
+  const maliciousUserId = new mongoose.Types.ObjectId().toString();
+  const maliciousId = new mongoose.Types.ObjectId().toString();
+
+  const response = await request(app)
+    .put(`/api/tasks/${targetId}`)
+    .set('Authorization', `Bearer ${token}`)
+    .send({
+      title: 'Legitimately changed title',
+      userId: maliciousUserId,
+      _id: maliciousId,
+    });
+
+  expect(response.status).toBe(200);
+  expect(response.body.data.title).toBe('Legitimately changed title');
+  expect(response.body.data.userId).not.toBe(maliciousUserId);
+  expect(response.body.data._id).not.toBe(maliciousId);
+  expect(response.body.data._id).toBe(targetId);
+});
+
 test('rejects deleting another user\'s task', async () => {
   const response = await request(app)
     .delete(`/api/tasks/${newTaskId}`)
@@ -324,7 +350,7 @@ test('returns an empty list with truthful metadata for a page beyond the end', a
 test('pagination correctly slices results across pages', async () => {
   const before = await request(app).get('/api/tasks').set('Authorization', `Bearer ${token}`);
   const initialTotal = before.body.pagination.total;
-
+  console.log(initialTotal)
   const limit = 5;
   const tasksToCreate = limit + 3;
 
@@ -353,7 +379,7 @@ test('pagination correctly slices results across pages', async () => {
     .query({ page: 2, limit });
 
   const expectedTotal = initialTotal + tasksToCreate;
-  const expectedPage2Size = expectedTotal - limit;
+  const expectedPage2Size = Math.min(limit, Math.max(expectedTotal - limit, 0));
 
   expect(page1.status).toBe(200);
   expect(page1.body.data.length).toBe(limit);
