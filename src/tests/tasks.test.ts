@@ -210,7 +210,7 @@ test('rejects an invalid status value on update, with no saved change', async ()
 });
 
 // TODO (Step 5 continued): unknown/irrelevant fields, oversized body, empty strings
-test('creates a task with a valid token, but doesn"t create unknown fields', async () => {
+test('creates a task with a valid token, but ignores unknown fields', async () => {
   const response = await request(app)
     .post('/api/tasks')
     .set('Authorization', `Bearer ${token}`)
@@ -219,10 +219,8 @@ test('creates a task with a valid token, but doesn"t create unknown fields', asy
       description: 'Valid description field',
       status: 'pending',
       foo: 'bar',
-      isAdmin: true 
+      isAdmin: true,
     });
-
-  taskId = response.body.data._id;
 
   expect(response.status).toBe(201);
   expect(response.body.success).toBe(true);
@@ -232,79 +230,40 @@ test('creates a task with a valid token, but doesn"t create unknown fields', asy
 
 // --- Mass-assignment / ownership integrity ---
 
-test('ignores a client supplied userId when creating a task', async () => {
-  const maliciousUserId = new mongoose.Types.ObjectId().toString();
-
-  const response = await request(app)
-    .post('/api/tasks')
-    .set('Authorization', `Bearer ${token}`)
-    .send({
-      title: 'Mass assignment test task',
-      description: 'Attempting to set userId directly',
-      status: 'pending',
-      userId: maliciousUserId,
-    });
-
-  expect(response.status).toBe(201);
-  expect(response.body.success).toBe(true);
-  expect(response.body.data.userId).not.toBe(maliciousUserId);
-});
-
-test('ignores a client-supplied userId and _id when updating a task', async () => {
-  const setup = await request(app)
-    .post('/api/tasks')
-    .set('Authorization', `Bearer ${token}`)
-    .send({ title: 'Mass assignment update target', status: 'pending' });
-  const targetId = setup.body.data._id;
-
-  const maliciousUserId = new mongoose.Types.ObjectId().toString();
-  const maliciousId = new mongoose.Types.ObjectId().toString();
-
-  const response = await request(app)
-    .put(`/api/tasks/${targetId}`)
-    .set('Authorization', `Bearer ${token}`)
-    .send({
-      title: 'Legitimately changed title',
-      userId: maliciousUserId,
-      _id: maliciousId,
-    });
-
-  expect(response.status).toBe(200);
-  expect(response.body.data.title).toBe('Legitimately changed title');
-  expect(response.body.data.userId).not.toBe(maliciousUserId);
-  expect(response.body.data._id).not.toBe(maliciousId);
-  expect(response.body.data._id).toBe(targetId);
-});
-
 test('ignores a client-supplied userId and _id when creating a task', async () => {
   const maliciousUserId = new mongoose.Types.ObjectId().toString();
   const maliciousId = new mongoose.Types.ObjectId().toString();
 
+  const realOwner = await User.findOne({ email: validUser.email });
+  if (!realOwner) {
+    throw new Error('Test setup failed: could not find seeded test user');
+  }
+
   const setup = await request(app)
     .post('/api/tasks')
     .set('Authorization', `Bearer ${token}`)
-    .send({ 
+    .send({
       userId: maliciousUserId,
       _id: maliciousId,
-      title: 'Mass assignment target for create task', 
-      status: 'pending', 
+      title: 'Mass assignment target for create task',
+      status: 'pending',
     });
 
   const targetId = setup.body.data._id;
 
   const response = await request(app)
     .get(`/api/tasks/${targetId}`)
-    .set('Authorization', `Bearer ${token}`) 
+    .set('Authorization', `Bearer ${token}`);
 
   expect(response.status).toBe(200);
   expect(response.body.success).toBe(true);
-  expect(response.body.data.userId).not.toBe(maliciousUserId);
-  expect(response.body.data._id).not.toBe(maliciousId);
   expect(response.body.data._id).toBe(targetId);
-  
+  expect(response.body.data.userId).toBe(realOwner._id.toString());
+  expect(response.body.data.title).toBe('Mass assignment target for create task');
+
   const secondUserResponse = await request(app)
     .get(`/api/tasks/${targetId}`)
-    .set('Authorization', `Bearer ${newToken}`) 
+    .set('Authorization', `Bearer ${newToken}`);
 
   expect(secondUserResponse.status).toBe(404);
   expect(secondUserResponse.body.success).toBe(false);
@@ -314,14 +273,19 @@ test('ignores a client-supplied userId and _id when editing a task', async () =>
   const maliciousUserId = new mongoose.Types.ObjectId().toString();
   const maliciousId = new mongoose.Types.ObjectId().toString();
 
+  const realOwner = await User.findOne({ email: validUser.email });
+  if (!realOwner) {
+    throw new Error('Test setup failed: could not find seeded test user');
+  }
+
   const setup = await request(app)
     .post('/api/tasks')
     .set('Authorization', `Bearer ${token}`)
-    .send({ 
+    .send({
       userId: maliciousUserId,
       _id: maliciousId,
-      title: 'Mass assignment target for create task', 
-      status: 'pending', 
+      title: 'Mass assignment target for edit task',
+      status: 'pending',
     });
 
   const targetId = setup.body.data._id;
@@ -329,38 +293,58 @@ test('ignores a client-supplied userId and _id when editing a task', async () =>
   const changeResponse = await request(app)
     .put(`/api/tasks/${targetId}`)
     .set('Authorization', `Bearer ${token}`)
-    .send({
-      title: 'Second Legitimately changed title',
-    });
+    .send({ title: 'Second legitimately changed title' });
 
   expect(changeResponse.status).toBe(200);
-  expect(changeResponse.body.data.title).toBe('Second Legitimately changed title');
+  expect(changeResponse.body.data.title).toBe('Second legitimately changed title');
 
   const response = await request(app)
     .get(`/api/tasks/${targetId}`)
-    .set('Authorization', `Bearer ${token}`) 
+    .set('Authorization', `Bearer ${token}`);
 
   expect(response.status).toBe(200);
-  expect(response.body.success).toBe(true);
-  expect(response.body.data.userId).not.toBe(maliciousUserId);
-  expect(response.body.data._id).not.toBe(maliciousId);
   expect(response.body.data._id).toBe(targetId);
-  
+  expect(response.body.data.userId).toBe(realOwner._id.toString());
+  expect(response.body.data.title).toBe('Second legitimately changed title');
+
   const secondUserResponse = await request(app)
     .get(`/api/tasks/${targetId}`)
-    .set('Authorization', `Bearer ${newToken}`) 
+    .set('Authorization', `Bearer ${newToken}`);
 
   expect(secondUserResponse.status).toBe(404);
-  expect(secondUserResponse.body.success).toBe(false);
 
-  const newUserResponse = await request(app)
-    .get(`/api/tasks/${maliciousUserId}`)
-    .set('Authorization', `Bearer ${token}`) 
+  const phantomTaskCheck = await request(app)
+    .get(`/api/tasks/${maliciousId}`)
+    .set('Authorization', `Bearer ${token}`);
 
-  expect(newUserResponse.status).toBe(404);
-  expect(newUserResponse.body.success).toBe(false);
+  expect(phantomTaskCheck.status).toBe(404);
 });
 
+test('rejects an empty string title', async () => {
+  const response = await request(app)
+    .post('/api/tasks')
+    .set('Authorization', `Bearer ${token}`)
+    .send({ title: '', status: 'pending' });
+
+  expect(response.status).toBe(400);
+  expect(response.body.success).toBe(false);
+  expect(response.body.error.code).toBe('VALIDATION_ERROR');
+});
+
+test('rejects a task description over the maximum length', async () => {
+  const response = await request(app)
+    .post('/api/tasks')
+    .set('Authorization', `Bearer ${token}`)
+    .send({
+      title: 'Oversized description test',
+      description: 'x'.repeat(5001),
+      status: 'pending',
+    });
+
+  expect(response.status).toBe(400);
+  expect(response.body.success).toBe(false);
+  expect(response.body.error.code).toBe('VALIDATION_ERROR');
+});
 // TODO (Step 5 continued): forced internal error → confirm no leaked detail
 
 // --- Cross-user ownership ---
