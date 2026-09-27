@@ -3,7 +3,7 @@ import type { Request, Response, NextFunction } from 'express';
 
 export const createTaskSchema = z.object({
   title: z.string().min(3, 'Title must be at least 3 characters'),
-  description: z.string().optional(),
+  description: z.string().max(5000, "description cannot exceed 5000 characters").optional(),
   status: z.enum(['pending', 'in-progress', 'completed']).optional(),
 });
 
