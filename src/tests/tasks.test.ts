@@ -258,6 +258,91 @@ test('ignores a client-supplied userId and _id when updating a task', async () =
   expect(response.body.data._id).toBe(targetId);
 });
 
+test('ignores a client-supplied userId and _id when creating a task', async () => {
+  const maliciousUserId = new mongoose.Types.ObjectId().toString();
+  const maliciousId = new mongoose.Types.ObjectId().toString();
+
+  const setup = await request(app)
+    .post('/api/tasks')
+    .set('Authorization', `Bearer ${token}`)
+    .send({ 
+      userId: maliciousUserId,
+      _id: maliciousId,
+      title: 'Mass assignment target for create task', 
+      status: 'pending', 
+    });
+
+  const targetId = setup.body.data._id;
+
+  const response = await request(app)
+    .get(`/api/tasks/${targetId}`)
+    .set('Authorization', `Bearer ${token}`) 
+
+  expect(response.status).toBe(200);
+  expect(response.body.success).toBe(true);
+  expect(response.body.data.userId).not.toBe(maliciousUserId);
+  expect(response.body.data._id).not.toBe(maliciousId);
+  expect(response.body.data._id).toBe(targetId);
+  
+  const secondUserResponse = await request(app)
+    .get(`/api/tasks/${targetId}`)
+    .set('Authorization', `Bearer ${newToken}`) 
+
+  expect(secondUserResponse.status).toBe(404);
+  expect(secondUserResponse.body.success).toBe(false);
+});
+
+test('ignores a client-supplied userId and _id when editing a task', async () => {
+  const maliciousUserId = new mongoose.Types.ObjectId().toString();
+  const maliciousId = new mongoose.Types.ObjectId().toString();
+
+  const setup = await request(app)
+    .post('/api/tasks')
+    .set('Authorization', `Bearer ${token}`)
+    .send({ 
+      userId: maliciousUserId,
+      _id: maliciousId,
+      title: 'Mass assignment target for create task', 
+      status: 'pending', 
+    });
+
+  const targetId = setup.body.data._id;
+
+  const changeResponse = await request(app)
+    .put(`/api/tasks/${targetId}`)
+    .set('Authorization', `Bearer ${token}`)
+    .send({
+      title: 'Second Legitimately changed title',
+    });
+
+  expect(changeResponse.status).toBe(200);
+  expect(changeResponse.body.data.title).toBe('Second Legitimately changed title');
+
+  const response = await request(app)
+    .get(`/api/tasks/${targetId}`)
+    .set('Authorization', `Bearer ${token}`) 
+
+  expect(response.status).toBe(200);
+  expect(response.body.success).toBe(true);
+  expect(response.body.data.userId).not.toBe(maliciousUserId);
+  expect(response.body.data._id).not.toBe(maliciousId);
+  expect(response.body.data._id).toBe(targetId);
+  
+  const secondUserResponse = await request(app)
+    .get(`/api/tasks/${targetId}`)
+    .set('Authorization', `Bearer ${newToken}`) 
+
+  expect(secondUserResponse.status).toBe(404);
+  expect(secondUserResponse.body.success).toBe(false);
+
+  const newUserResponse = await request(app)
+    .get(`/api/tasks/${maliciousUserId}`)
+    .set('Authorization', `Bearer ${token}`) 
+
+  expect(newUserResponse.status).toBe(404);
+  expect(newUserResponse.body.success).toBe(false);
+});
+
 // TODO (Step 5 continued): forced internal error → confirm no leaked detail
 
 // --- Cross-user ownership ---
