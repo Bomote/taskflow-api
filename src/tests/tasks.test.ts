@@ -188,8 +188,14 @@ test('rejects PUT /api/tasks/:id with an empty body', async () => {
 });
 
 test('rejects an invalid status value on update, with no saved change', async () => {
+  const setup = await request(app)
+    .post('/api/tasks')
+    .set('Authorization', `Bearer ${token}`)
+    .send({ title: 'Invalid status test target', status: 'pending' });
+  const targetId = setup.body.data._id;
+
   const response = await request(app)
-    .put(`/api/tasks/${newTaskId}`)
+    .put(`/api/tasks/${targetId}`)
     .set('Authorization', `Bearer ${token}`)
     .send({ status: 'ongoing' });
 
@@ -198,7 +204,7 @@ test('rejects an invalid status value on update, with no saved change', async ()
   expect(response.body.error.code).toBe('VALIDATION_ERROR');
 
   const followUp = await request(app)
-    .get(`/api/tasks/${newTaskId}`)
+    .get(`/api/tasks/${targetId}`)
     .set('Authorization', `Bearer ${token}`);
 
   expect(followUp.body.data.status).toBe('pending');
