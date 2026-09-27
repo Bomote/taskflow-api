@@ -124,26 +124,6 @@ test('deletes an owned task', async () => {
 });
 
 // --- Auth edge cases ---
-test('creates a task with a valid token, but doesn"t create unknown fields', async () => {
-  const response = await request(app)
-    .post('/api/tasks')
-    .set('Authorization', `Bearer ${token}`)
-    .send({
-      title: 'Valid title field',
-      description: 'Valid description field',
-      status: 'pending',
-      foo: 'bar',
-      isAdmin: true 
-    });
-
-  taskId = response.body.data._id;
-
-  expect(response.status).toBe(201);
-  expect(response.body.success).toBe(true);
-  expect(response.body).not.toHaveProperty('foo')
-  expect(response.body).not.toHaveProperty('idAdmin')
-});
-
 test('rejects GET /api/tasks with no auth header', async () => {
   const response = await request(app).get('/api/tasks');
 
@@ -230,6 +210,25 @@ test('rejects an invalid status value on update, with no saved change', async ()
 });
 
 // TODO (Step 5 continued): unknown/irrelevant fields, oversized body, empty strings
+test('creates a task with a valid token, but doesn"t create unknown fields', async () => {
+  const response = await request(app)
+    .post('/api/tasks')
+    .set('Authorization', `Bearer ${token}`)
+    .send({
+      title: 'Valid title field',
+      description: 'Valid description field',
+      status: 'pending',
+      foo: 'bar',
+      isAdmin: true 
+    });
+
+  taskId = response.body.data._id;
+
+  expect(response.status).toBe(201);
+  expect(response.body.success).toBe(true);
+  expect(response.body.data).not.toHaveProperty('foo');
+  expect(response.body.data).not.toHaveProperty('isAdmin');
+});
 
 // --- Mass-assignment / ownership integrity ---
 
