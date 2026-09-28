@@ -5,6 +5,7 @@ import { connectDB } from '../config/db.ts';
 import { User } from '../models/User.ts';
 import { Task } from '../models/Task.ts';
 import jwt from 'jsonwebtoken';
+import { jest } from '@jest/globals';
 
 let token: string;
 let taskId: string;
@@ -543,4 +544,23 @@ test('pagination totals only reflect the authenticated user\'s own tasks', async
   const theirIds = theirTasks.body.data.map((t: { _id: string }) => t._id);
 
   expect(myIds.some((id: string) => theirIds.includes(id))).toBe(false);
+});
+
+test('returns a generic error and leaks nothing when the database fails unexpectedly', async () => {
+  const secretDetail = 'Simulated failure: connection string exposed in this message';
+
+  const spy = jest
+    .spyOn(Task, 'find')
+    .mockImplementationOnce(() => {
+      throw new Error(secretDetail);
+    });
+
+  const response = await request(app).get('/api/tasks').set('Authorization', `Bearer ${token}`);
+
+  expect(response.status).toBe(500);
+  expect(response.body.success).toBe(false);
+  expect(response.body.error.code).toBe('INTERNAL_ERROR');
+  expect(JSON.stringify(response.body)).not.toContain(secretDetail);
+
+  spy.mockRestore();
 });
