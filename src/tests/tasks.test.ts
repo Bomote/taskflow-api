@@ -228,7 +228,11 @@ test('creates a task with a valid token, but ignores unknown fields', async () =
   expect(response.body.data).not.toHaveProperty('isAdmin');
 });
 
-// --- Mass-assignment / ownership integrity ---
+/**
+ * 
+ * Mass-assignment / ownership integrity
+ * 
+*/
 
 test('ignores a client-supplied userId and _id when creating a task', async () => {
   const maliciousUserId = new mongoose.Types.ObjectId().toString();
@@ -250,6 +254,10 @@ test('ignores a client-supplied userId and _id when creating a task', async () =
     });
 
   const targetId = setup.body.data._id;
+
+  expect(setup.status).toBe(201);
+  expect(setup.body.success).toBe(true);
+  expect(targetId).not.toBe(maliciousId);
 
   const response = await request(app)
     .get(`/api/tasks/${targetId}`)
@@ -293,7 +301,11 @@ test('ignores a client-supplied userId and _id when editing a task', async () =>
   const changeResponse = await request(app)
     .put(`/api/tasks/${targetId}`)
     .set('Authorization', `Bearer ${token}`)
-    .send({ title: 'Second legitimately changed title' });
+    .send({ 
+      title: 'Second legitimately changed title',
+      userId: maliciousUserId,
+      _id: maliciousId 
+    });
 
   expect(changeResponse.status).toBe(200);
   expect(changeResponse.body.data.title).toBe('Second legitimately changed title');
