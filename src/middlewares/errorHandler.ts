@@ -16,6 +16,6 @@ export function errorHandler(
     return sendError(res, 'VALIDATION_ERROR', details);
   }
 
-  console.error(err);
-  return sendError(res, 'INTERNAL_ERROR');
+  console.error(`[${req.id}]`, err);
+  return sendError(res, 'INTERNAL_ERROR', undefined, { requestId: req.id });
 }

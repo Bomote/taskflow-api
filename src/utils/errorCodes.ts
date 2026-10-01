@@ -22,11 +22,13 @@ type ValidationDetail = {
 export function sendError(
   res: Response,
   key: ErrorKey,
-  details?: ValidationDetail[]
+  details?: ValidationDetail[],
+  extra?: Record<string, unknown>
 ) {
   const { status, message } = ERR_CODES[key];
   return res.status(status).json({
     success: false,
     error: { code: key, message, ...(details ? { details } : {}) },
+    ...extra,
   });
 }
