@@ -61,6 +61,24 @@ test('rejects registration with a password missing a required character class (W
   expect(response.body.error.details[0].field).toBe('password');
 });
 
+test('handles simultaneous duplicate-registration race condition safely', async () => {
+  const raceUser = {
+    name: 'Race User',
+    email: 'race.user@example.com',
+    password: 'TestDataPass!123',
+  };
+
+  const results = await Promise.all([
+    request(app).post('/api/auth/register').send(raceUser),
+    request(app).post('/api/auth/register').send(raceUser),
+  ]);
+
+  const statuses = results.map((r) => r.status);
+  
+  expect(statuses).toContain(201);
+  expect(statuses).toContain(409);
+});
+
 // ==========================================
 // 2. LOGIN & CREDENTIAL VALIDATION
 // ==========================================

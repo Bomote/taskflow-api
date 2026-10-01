@@ -600,3 +600,82 @@ test('returns a generic error and leaks nothing when the database fails unexpect
 
   spy.mockRestore();
 });
+
+// ==========================================
+// 8. ADDITIONAL EDGE CASES & REMAINING TESTS
+// ==========================================
+
+test.each([
+  ['GET', 'get', null],
+  ['PUT', 'put', { status: 'completed' }],
+  ['DELETE', 'delete', null],
+])('rejects malformed task ID for %s /api/tasks/:id', async (_methodName, httpMethod, payload) => {
+  const req = request(app)[httpMethod as 'get' | 'put' | 'delete']('/api/tasks/not-a-real-id')
+    .set('Authorization', `Bearer ${token}`);
+  
+  if (payload) req.send(payload);
+  const response = await req;
+
+  expect(response.status).toBe(400);
+  expect(response.body.success).toBe(false);
+  expect(response.body.error.code).toBe('INVALID_ID');
+});
+
+test.each([
+  ['GET', 'get', null],
+  ['PUT', 'put', { status: 'completed' }],
+  ['DELETE', 'delete', null],
+])('returns 404 for nonexistent task ID for %s /api/tasks/:id', async (_methodName, httpMethod, payload) => {
+  const fakeId = new mongoose.Types.ObjectId().toString();
+  const req = request(app)[httpMethod as 'get' | 'put' | 'delete'](`/api/tasks/${fakeId}`)
+    .set('Authorization', `Bearer ${token}`);
+  
+  if (payload) req.send(payload);
+  const response = await req;
+
+  expect(response.status).toBe(404);
+  expect(response.body.success).toBe(false);
+});
+
+test('rejects task creation with missing required fields (empty body or missing title)', async () => {
+  const response = await request(app)
+    .post('/api/tasks')
+    .set('Authorization', `Bearer ${token}`)
+    .send({});
+
+  expect(response.status).toBe(400);
+  expect(response.body.success).toBe(false);
+  expect(response.body.error.code).toBe('VALIDATION_ERROR');
+});
+
+test('rejects task creation with invalid data types (e.g., array instead of string)', async () => {
+  const response = await request(app)
+    .post('/api/tasks')
+    .set('Authorization', `Bearer ${token}`)
+    .send({
+      title: ['Invalid Title Array'],
+      status: 'pending',
+    });
+
+  expect(response.status).toBe(400);
+  expect(response.body.success).toBe(false);
+  expect(response.body.error.code).toBe('VALIDATION_ERROR');
+});
+
+test('verifies rejected create and update requests do not mutate or create stored data', async () => {
+  const initialList = await request(app)
+    .get('/api/tasks')
+    .set('Authorization', `Bearer ${token}`);
+  const initialCount = initialList.body.data.length;
+
+  await request(app)
+    .post('/api/tasks')
+    .set('Authorization', `Bearer ${token}`)
+    .send({ title: '', status: 'invalid-status' });
+
+  const afterList = await request(app)
+    .get('/api/tasks')
+    .set('Authorization', `Bearer ${token}`);
+
+  expect(afterList.body.data.length).toBe(initialCount);
+});
