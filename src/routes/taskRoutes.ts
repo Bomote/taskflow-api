@@ -60,8 +60,14 @@ const taskRouter = Router();
  *                       type: integer
  *       400:
  *         description: Invalid page or limit
+ *         content:
+ *          application/json:
+ *            schema: { $ref: '#/components/schemas/ErrorResponse' }
  *       401:
  *         description: Missing or invalid token
+ *        content:
+ *         application/json:
+ *           schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 taskRouter.get('/', protect, validateQuery(paginationQuerySchema), getTasks);
 
@@ -95,8 +101,14 @@ taskRouter.get('/', protect, validateQuery(paginationQuerySchema), getTasks);
  *         description: Task created
  *       400:
  *         description: Validation failed
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  *       401:
  *         description: Missing or invalid token
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 taskRouter.post('/', protect, validateRequest(createTaskSchema), createTask);
 
@@ -119,10 +131,19 @@ taskRouter.post('/', protect, validateRequest(createTaskSchema), createTask);
  *         description: The requested task
  *       400:
  *         description: Invalid ID format
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  *       401:
  *         description: Missing or invalid token
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  *       404:
  *         description: Task not found
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 taskRouter.get('/:id', protect, getTaskById);
 
@@ -160,10 +181,19 @@ taskRouter.get('/:id', protect, getTaskById);
  *         description: Task updated
  *       400:
  *         description: Invalid ID format or validation failed
+ *        content:
+ *          application/json:
+ *            schema: { $ref: '#/components/schemas/ErrorResponse' }
  *       401:
  *         description: Missing or invalid token
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  *       404:
  *         description: Task not found
+ *       content:
+ *        application/json:
+ *          schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 taskRouter.put('/:id', protect, validateRequest(updateTaskSchema), updateTask);
 
@@ -186,10 +216,19 @@ taskRouter.put('/:id', protect, validateRequest(updateTaskSchema), updateTask);
  *         description: Task deleted
  *       400:
  *         description: Invalid ID format
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  *       401:
  *         description: Missing or invalid token
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  *       404:
  *         description: Task not found
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 taskRouter.delete('/:id', protect, deleteTask);
 

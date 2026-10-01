@@ -36,18 +36,12 @@ const authRouter = Router();
  *         description: Email already registered
  *         content:
  *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 error:
- *                   type: object
- *                   properties:
- *                     code:
- *                       type: string
- *                     message:
- *                       type: string  
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       500:
+ *         description: Unexpected server error
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 authRouter.post('/register', validateRequest(registerSchema), registerUser);
 
@@ -77,8 +71,14 @@ authRouter.post('/register', validateRequest(registerSchema), registerUser);
  *         description: Login successful, returns a JWT
  *       401:
  *         description: Invalid credentials (same message for wrong password or unknown email)
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  *       500:
  *         description: Unexpected server error
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 authRouter.post('/login', validateRequest(loginSchema), loginUser);
 

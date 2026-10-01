@@ -261,6 +261,31 @@ test('rejects a task description over the maximum length', async () => {
   expect(response.body.error.code).toBe('VALIDATION_ERROR');
 });
 
+test('rejects a non-Bearer authorization scheme', async () => {
+  const response = await request(app)
+    .get('/api/tasks')
+    .set('Authorization', `Basic ${token}`);
+
+  expect(response.status).toBe(401);
+  expect(response.body.success).toBe(false);
+  expect(response.body.error.code).toBe('UNAUTHORIZED');
+});
+
+test('rejects a token signed with the wrong secret', async () => {
+  const wrongSecretToken = jwt.sign({ id: 'someuserid' }, 'not-the-real-secret', {
+    algorithm: 'HS256',
+    expiresIn: '1h',
+  });
+
+  const response = await request(app)
+    .get('/api/tasks')
+    .set('Authorization', `Bearer ${wrongSecretToken}`);
+
+  expect(response.status).toBe(401);
+  expect(response.body.success).toBe(false);
+  expect(response.body.error.code).toBe('UNAUTHORIZED');
+});
+
 // ==========================================
 // 4. MASS-ASSIGNMENT & OWNERSHIP INTEGRITY
 // ==========================================
