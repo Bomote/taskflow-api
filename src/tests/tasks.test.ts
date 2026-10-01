@@ -58,7 +58,9 @@ afterAll(async () => {
   await mongoose.disconnect();
 });
 
-// --- Core CRUD happy paths ---
+// ==========================================
+// 1. CORE CRUD HAPPY PATHS
+// ==========================================
 
 test('creates a task with a valid token', async () => {
   const response = await request(app)
@@ -124,7 +126,10 @@ test('deletes an owned task', async () => {
   expect(followUp.status).toBe(404);
 });
 
-// --- Auth edge cases ---
+// ==========================================
+// 2. AUTH EDGE CASES (Tokens, Headers, Expiry)
+// ==========================================
+
 test('rejects GET /api/tasks with no auth header', async () => {
   const response = await request(app).get('/api/tasks');
 
@@ -164,7 +169,9 @@ test('rejects an expired token', async () => {
   expect(response.body.error.code).toBe('UNAUTHORIZED');
 });
 
-// --- Validation edge cases ---
+// ==========================================
+// 3. VALIDATION EDGE CASES
+// ==========================================
 
 test('rejects a malformed task ID', async () => {
   const response = await request(app)
@@ -210,7 +217,6 @@ test('rejects an invalid status value on update, with no saved change', async ()
   expect(followUp.body.data.status).toBe('pending');
 });
 
-// TODO (Step 5 continued): unknown/irrelevant fields, oversized body, empty strings
 test('creates a task with a valid token, but ignores unknown fields', async () => {
   const response = await request(app)
     .post('/api/tasks')
@@ -229,11 +235,35 @@ test('creates a task with a valid token, but ignores unknown fields', async () =
   expect(response.body.data).not.toHaveProperty('isAdmin');
 });
 
-/**
- * 
- * Mass-assignment / ownership integrity
- * 
-*/
+test('rejects an empty string title', async () => {
+  const response = await request(app)
+    .post('/api/tasks')
+    .set('Authorization', `Bearer ${token}`)
+    .send({ title: '', status: 'pending' });
+
+  expect(response.status).toBe(400);
+  expect(response.body.success).toBe(false);
+  expect(response.body.error.code).toBe('VALIDATION_ERROR');
+});
+
+test('rejects a task description over the maximum length', async () => {
+  const response = await request(app)
+    .post('/api/tasks')
+    .set('Authorization', `Bearer ${token}`)
+    .send({
+      title: 'Oversized description test',
+      description: 'x'.repeat(5001),
+      status: 'pending',
+    });
+
+  expect(response.status).toBe(400);
+  expect(response.body.success).toBe(false);
+  expect(response.body.error.code).toBe('VALIDATION_ERROR');
+});
+
+// ==========================================
+// 4. MASS-ASSIGNMENT & OWNERSHIP INTEGRITY
+// ==========================================
 
 test('ignores a client-supplied userId and _id when creating a task', async () => {
   const maliciousUserId = new mongoose.Types.ObjectId().toString();
@@ -333,34 +363,9 @@ test('ignores a client-supplied userId and _id when editing a task', async () =>
   expect(phantomTaskCheck.status).toBe(404);
 });
 
-test('rejects an empty string title', async () => {
-  const response = await request(app)
-    .post('/api/tasks')
-    .set('Authorization', `Bearer ${token}`)
-    .send({ title: '', status: 'pending' });
-
-  expect(response.status).toBe(400);
-  expect(response.body.success).toBe(false);
-  expect(response.body.error.code).toBe('VALIDATION_ERROR');
-});
-
-test('rejects a task description over the maximum length', async () => {
-  const response = await request(app)
-    .post('/api/tasks')
-    .set('Authorization', `Bearer ${token}`)
-    .send({
-      title: 'Oversized description test',
-      description: 'x'.repeat(5001),
-      status: 'pending',
-    });
-
-  expect(response.status).toBe(400);
-  expect(response.body.success).toBe(false);
-  expect(response.body.error.code).toBe('VALIDATION_ERROR');
-});
-// TODO (Step 5 continued): forced internal error → confirm no leaked detail
-
-// --- Cross-user ownership ---
+// ==========================================
+// 5. CROSS-USER OWNERSHIP (Ownership 404s)
+// ==========================================
 
 test('creates a second task to use as the ownership target', async () => {
   const response = await request(app)
@@ -413,7 +418,9 @@ test('confirms the task was untouched by the blocked update and delete attempts'
   expect(response.body.data.title).toBe(secondTask.title);
 });
 
-// --- Pagination ---
+// ==========================================
+// 6. PAGINATION
+// ==========================================
 
 test('rejects a limit above the allowed maximum', async () => {
   const response = await request(app)
@@ -545,6 +552,10 @@ test('pagination totals only reflect the authenticated user\'s own tasks', async
 
   expect(myIds.some((id: string) => theirIds.includes(id))).toBe(false);
 });
+
+// ==========================================
+// 7. FORCED INTERNAL ERROR (Forced 500)
+// ==========================================
 
 test('returns a generic error and leaks nothing when the database fails unexpectedly', async () => {
   const secretDetail = 'Simulated failure: connection string exposed in this message';

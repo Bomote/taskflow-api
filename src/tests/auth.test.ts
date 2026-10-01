@@ -22,6 +22,10 @@ afterAll(async () => {
   await mongoose.disconnect();
 });
 
+// ==========================================
+// 1. REGISTRATION & WEAK PASSWORD VALIDATION
+// ==========================================
+
 test('registers a new user successfully', async () => {
   const response = await request(app).post('/api/auth/register').send(validUser);
 
@@ -44,7 +48,7 @@ test('rejects registration when the email is already taken', async () => {
   expect(response.body.error.code).toBe('EMAIL_ALREADY_REGISTERED');
 });
 
-test('rejects registration with a password missing a required character class', async () => {
+test('rejects registration with a password missing a required character class (Weak Password)', async () => {
   const response = await request(app).post('/api/auth/register').send({
     name: 'Weak Password User',
     email: 'weakpass@example.com',
@@ -56,6 +60,10 @@ test('rejects registration with a password missing a required character class', 
   expect(response.body.error.code).toBe('VALIDATION_ERROR');
   expect(response.body.error.details[0].field).toBe('password');
 });
+
+// ==========================================
+// 2. LOGIN & CREDENTIAL VALIDATION
+// ==========================================
 
 test('logs in successfully with valid credentials', async () => {
   const response = await request(app).post('/api/auth/login').send({

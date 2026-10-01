@@ -32,8 +32,22 @@ const authRouter = Router();
  *     responses:
  *       201:
  *         description: User created
- *       400:
- *         description: Email already registered, or validation/creation failed
+ *        409:
+ *         description: Email already registered
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 error:
+ *                   type: object
+ *                   properties:
+ *                     code:
+ *                       type: string
+ *                     message:
+ *                       type: string  
  */
 authRouter.post('/register', validateRequest(registerSchema), registerUser);
 
@@ -61,7 +75,7 @@ authRouter.post('/register', validateRequest(registerSchema), registerUser);
  *     responses:
  *       200:
  *         description: Login successful, returns a JWT
- *       400:
+ *       401:
  *         description: Invalid credentials (same message for wrong password or unknown email)
  *       500:
  *         description: Unexpected server error
