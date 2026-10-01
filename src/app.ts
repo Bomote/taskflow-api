@@ -7,6 +7,7 @@ import authRouter from './routes/authRoutes.ts';
 import { errorHandler } from './middlewares/errorHandler.ts';
 import { swaggerUiServe, swaggerUiSetup } from './config/swagger.ts';
 import { sendError } from './utils/errorCodes.ts';
+import mongoose from 'mongoose';
 
 const app = express();
 
@@ -22,8 +23,13 @@ app.use(helmet());
 app.use(cors());
 app.use(express.json());
 
-app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'ok', timestamp: new Date() });
+app.get('/health/live', (req, res) => {
+  res.status(200).json({ status: 'ok' });
+});
+
+app.get('/health/ready', (req, res) => {
+  const isConnected = mongoose.connection.readyState === 1;
+  res.status(isConnected ? 200 : 503).json({ status: isConnected ? 'ok' : 'unavailable' });
 });
 
 app.use('/api/tasks', taskRouter);
