@@ -34,7 +34,9 @@ export async function getTasks(req: Request, res: Response): Promise<Response> {
       pagination: { page, limit, total, totalPages },
     });
   } catch (error) {
-    console.error(error);
+    if (process.env.NODE_ENV !== 'test') {
+      console.error(error);
+    }
     return sendError(res, 'INTERNAL_ERROR');
   }
 }
@@ -55,7 +57,9 @@ export async function createTask(req: Request, res: Response): Promise<Response>
     });
     return res.status(201).json({ success: true, data: createdTask });
   } catch (error) {
-    console.error(error)
+    if (process.env.NODE_ENV !== 'test') {
+      console.error(error);
+    }
     return sendError(res, 'INTERNAL_ERROR');
   }
 }
@@ -75,25 +79,27 @@ export async function getTaskById(req: Request, res: Response): Promise<Response
     const task = await Task.findOne({ _id: taskId, userId: req.user.id });
 
     if (!task) {
-      return sendError(res, 'TASK_NOT_FOUND')
+      return sendError(res, 'TASK_NOT_FOUND');
     }
 
     return res.status(200).json({ success: true, data: task });
   } catch (error) {
-    console.error(error)
+    if (process.env.NODE_ENV !== 'test') {
+      console.error(error);
+    }
     return sendError(res, 'INTERNAL_ERROR');
   }
 }
 
 export async function updateTask(req: Request, res: Response): Promise<Response> {
   if (!req.user) {
-    return sendError(res, 'UNAUTHORIZED')
+    return sendError(res, 'UNAUTHORIZED');
   }
 
   const { id: taskId } = req.params;
 
   if (!isValidObjectId(taskId)) {
-    return sendError(res, 'INVALID_ID')
+    return sendError(res, 'INVALID_ID');
   }
 
   if (Object.keys(req.body).length === 0) {
@@ -117,37 +123,41 @@ export async function updateTask(req: Request, res: Response): Promise<Response>
     );
 
     if (!updatedTask) {
-      return sendError(res, 'TASK_NOT_FOUND')
+      return sendError(res, 'TASK_NOT_FOUND');
     }
 
     return res.status(200).json({ success: true, data: updatedTask });
   } catch (error) {
-    console.error(error);
+    if (process.env.NODE_ENV !== 'test') {
+      console.error(error);
+    }
     return sendError(res, 'INTERNAL_ERROR');
   }
 }
 
 export async function deleteTask(req: Request, res: Response): Promise<Response> {
   if (!req.user) {
-    return sendError(res, 'UNAUTHORIZED')
+    return sendError(res, 'UNAUTHORIZED');
   }
 
   const { id: taskId } = req.params;
 
   if (!isValidObjectId(taskId)) {
-    return sendError(res, 'INVALID_ID')
+    return sendError(res, 'INVALID_ID');
   }
 
   try {
     const deletedTask = await Task.findOneAndDelete({ _id: taskId, userId: req.user.id });
 
     if (!deletedTask) {
-      return sendError(res, 'TASK_NOT_FOUND')
+      return sendError(res, 'TASK_NOT_FOUND');
     }
 
     return res.status(200).json({ success: true, data: deletedTask });
   } catch (error) {
-    console.error(error);
+    if (process.env.NODE_ENV !== 'test') {
+      console.error(error);
+    }
     return sendError(res, 'INTERNAL_ERROR');
   }
 }

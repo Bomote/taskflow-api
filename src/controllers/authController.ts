@@ -36,10 +36,9 @@ export async function registerUser(req: Request, res: Response): Promise<Respons
       'code' in error &&
       error.code === 11000
     ) {
-      console.error(error);
       return sendError(res, 'EMAIL_ALREADY_REGISTERED');
     }
-    console.error(error)
+    console.error(error);
     return sendError(res, 'INTERNAL_ERROR');
   }
 }
@@ -70,7 +69,7 @@ export async function loginUser(req: Request, res: Response): Promise<Response> 
       data: { token },
     });
   } catch (error) {
-    console.error(error)
+    console.error(error);
     return sendError(res, 'INTERNAL_ERROR');
   }
 }

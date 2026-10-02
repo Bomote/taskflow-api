@@ -40,7 +40,6 @@ export function protect(req: Request, res: Response, next: NextFunction) {
     req.user = decoded;
     return next();
   } catch (error) {
-    console.error(error);
     return sendError(res, 'UNAUTHORIZED');
   }
 }
