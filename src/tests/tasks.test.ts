@@ -679,3 +679,19 @@ test('verifies rejected create and update requests do not mutate or create store
 
   expect(afterList.body.data.length).toBe(initialCount);
 });
+
+test('rejects an oversized whole JSON body exceeding the request limit with status 413 and safe public error', async () => {
+  const privateMarker = 'SECRET_PRIVATE_MARKER_98765';
+  const response = await request(app)
+    .post('/api/tasks')
+    .set('Authorization', `Bearer ${token}`)
+    .send({
+      title: privateMarker,
+      payload: 'x'.repeat(150 * 1024), // 150KB payload, exceeding 100KB limit
+    });
+
+  expect(response.status).toBe(413);
+  expect(response.body.success).toBe(false);
+  expect(response.body.error.code).toBe('PAYLOAD_TOO_LARGE');
+  expect(JSON.stringify(response.body)).not.toContain(privateMarker);
+});
