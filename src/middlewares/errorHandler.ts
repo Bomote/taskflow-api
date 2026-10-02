@@ -16,6 +16,17 @@ export function errorHandler(
     return sendError(res, 'VALIDATION_ERROR', details);
   }
 
-  console.error(`[${req.id}]`, err);
+  if (
+    err &&
+    typeof err === 'object' &&
+    (('type' in err && (err as any).type === 'entity.too.large') ||
+     ('status' in err && (err as any).status === 413))
+  ) {
+    return sendError(res, 'PAYLOAD_TOO_LARGE');
+  }
+
+  if (process.env.NODE_ENV !== 'test') {
+    console.error(`[${req.id}]`, err);
+  }
   return sendError(res, 'INTERNAL_ERROR', undefined, { requestId: req.id });
 }

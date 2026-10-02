@@ -10,6 +10,7 @@ export const ERR_CODES = {
   ROUTE_NOT_FOUND: { status: 404, message: 'Unknown route' },
   INTERNAL_ERROR: { status: 500, message: 'Unexpected internal error' },
   EMPTY_UPDATE: { status: 400, message: 'Update body cannot be empty' },
+  PAYLOAD_TOO_LARGE: { status: 413, message: 'Request payload is too large' },
 } as const;
 
 type ErrorKey = keyof typeof ERR_CODES;
