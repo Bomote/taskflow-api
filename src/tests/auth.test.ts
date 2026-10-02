@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import request from 'supertest';
 import { connectDB } from '../config/db.ts';
 import app from '../app.ts';
+import { User } from '../models/User.ts';
 
 const validUser = {
   name: 'John Doe',
@@ -77,6 +78,10 @@ test('handles simultaneous duplicate-registration race condition safely', async 
   
   expect(statuses).toContain(201);
   expect(statuses).toContain(409);
+
+  // Assert database contains exactly one user with this email
+  const userCount = await User.countDocuments({ email: raceUser.email });
+  expect(userCount).toBe(1);
 });
 
 // ==========================================
