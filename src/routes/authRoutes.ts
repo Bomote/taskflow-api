@@ -32,7 +32,7 @@ const authRouter = Router();
  *     responses:
  *       201:
  *         description: User created
- *        409:
+ *       409:
  *         description: Email already registered
  *         content:
  *           application/json:

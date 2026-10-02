@@ -61,13 +61,13 @@ const taskRouter = Router();
  *       400:
  *         description: Invalid page or limit
  *         content:
- *          application/json:
- *            schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  *       401:
  *         description: Missing or invalid token
- *        content:
- *         application/json:
- *           schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 taskRouter.get('/', protect, validateQuery(paginationQuerySchema), getTasks);
 
@@ -181,9 +181,9 @@ taskRouter.get('/:id', protect, getTaskById);
  *         description: Task updated
  *       400:
  *         description: Invalid ID format or validation failed
- *        content:
- *          application/json:
- *            schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  *       401:
  *         description: Missing or invalid token
  *         content:
@@ -191,9 +191,9 @@ taskRouter.get('/:id', protect, getTaskById);
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  *       404:
  *         description: Task not found
- *       content:
- *        application/json:
- *          schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 taskRouter.put('/:id', protect, validateRequest(updateTaskSchema), updateTask);
 
