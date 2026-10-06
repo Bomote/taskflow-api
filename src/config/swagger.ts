@@ -21,8 +21,8 @@ const options: swaggerJsdoc.Options = {
             error: {
               type: 'object',
               properties: {
-                code: { type: 'string' },
-                message: { type: 'string' },
+                code: { type: 'string', example: 'VALIDATION_ERROR' },
+                message: { type: 'string', example: 'Validation failed' },
                 details: {
                   type: 'array',
                   items: {
@@ -32,6 +32,7 @@ const options: swaggerJsdoc.Options = {
                 },
               },
             },
+            requestId: { type: 'string', description: 'Correlation ID included only on internal server errors' },
           },
         },
       },
