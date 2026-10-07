@@ -35,7 +35,7 @@ const authRouter = Router();
  *         description: User created successfully
  *         content:
  *           application/json:
- *                         schema:
+ *             schema:
  *               type: object
  *               properties:
  *                 success:
