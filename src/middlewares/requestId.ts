@@ -10,7 +10,8 @@ declare global {
 }
 
 export function requestId(req: Request, res: Response, next: NextFunction) {
-  req.id = randomUUID();
+  const incomingId = req.headers['x-request-id'];
+  req.id = typeof incomingId === 'string' && incomingId.trim() ? incomingId : randomUUID();
   res.setHeader('X-Request-Id', req.id);
   next();
 }
