@@ -5,4 +5,5 @@ export default {
   extensionsToTreatAsEsm: ['.ts', '.tsx'],
   globalSetup: './src/tests/testSetup.ts',
   globalTeardown: './src/tests/testTeardown.ts',
+  testPathIgnorePatterns: ['/node_modules/', '/dist/']
 };

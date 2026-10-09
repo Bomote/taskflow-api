@@ -6,9 +6,11 @@ import swaggerUi from 'swagger-ui-express';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const routesPattern = __dirname.includes('dist')
+const rawRoutePath = __dirname.includes('dist')
   ? path.join(__dirname, '../routes/*.js')
   : path.join(__dirname, '../routes/*.ts');
+
+const routesPattern = rawRoutePath.replace(/\\/g, '/');
 
 const options: swaggerJsdoc.Options = {
   definition: {

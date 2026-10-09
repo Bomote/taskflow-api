@@ -19,9 +19,9 @@
   "description": "task management rest API",
   "main": "server.ts",
   "scripts": {
-    "test": "cross-env NODE_OPTIONS=--experimental-vm-modules jest",
+    "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
-    "build": "tsc",
+    "test": "cross-env NODE_OPTIONS=--experimental-vm-modules jest",
     "seed": "cross-env CONFIRM_SEED=true node --env-file=.env src/utils/seed.ts"
   },
   "repository": {
