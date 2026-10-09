@@ -6,7 +6,7 @@ import swaggerUi from 'swagger-ui-express';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const rawRoutePath = __dirname.includes('dist')
+const rawRoutePath = path.extname(__filename) === '.js'
   ? path.join(__dirname, '../routes/*.js')
   : path.join(__dirname, '../routes/*.ts');
 

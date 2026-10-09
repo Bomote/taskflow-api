@@ -1,8 +1,10 @@
 {
+  "engines": {
+    "node": ">=22.18.0"
+  },
   "dependencies": {
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
-    "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "express-rate-limit": "^8.7.0",
     "helmet": "^8.3.0",
@@ -11,18 +13,20 @@
     "mongoose": "^9.9.2",
     "swagger-jsdoc": "^6.3.0",
     "swagger-ui-express": "^5.0.1",
-    "typescript": "^7.0.2",
     "zod": "^4.4.3"
   },
   "name": "taskflow-api",
   "version": "1.0.0",
   "description": "task management rest API",
-  "main": "server.ts",
+  "main": "dist/server.js",
   "scripts": {
+    "prebuild": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "test": "cross-env NODE_OPTIONS=--experimental-vm-modules jest",
-    "seed": "cross-env CONFIRM_SEED=true node --env-file=.env src/utils/seed.ts"
+    "seed": "cross-env CONFIRM_SEED=true node --env-file=.env src/utils/seed.ts",
+    "start": "node dist/server.js",
+    "dev": "node --watch --env-file=.env src/server.ts"
   },
   "repository": {
     "type": "git",
@@ -40,6 +44,7 @@
   },
   "homepage": "https://github.com/Bomote/taskflow-api#readme",
   "devDependencies": {
+    "typescript": "^7.0.2",
     "@swc/jest": "^0.2.39",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
