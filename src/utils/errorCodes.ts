@@ -11,6 +11,7 @@ export const ERR_CODES = {
   INTERNAL_ERROR: { status: 500, message: 'Unexpected internal error' },
   EMPTY_UPDATE: { status: 400, message: 'Update body cannot be empty' },
   PAYLOAD_TOO_LARGE: { status: 413, message: 'Request payload is too large' },
+  INVALID_JSON: { status: 400, message: 'Request body is not valid JSON' },
 } as const;
 
 type ErrorKey = keyof typeof ERR_CODES;
