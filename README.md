@@ -116,6 +116,29 @@ The `message` field is human-readable.
 
 The optional `details` field is included for validation failures and provides a per-field breakdown.
 
+### Request IDs
+
+Every response, including errors such as `401`, `404`, `413`, and `400`, carries an `X-Request-Id` header.
+
+- If the client sends a valid `X-Request-Id` (1–64 characters from `A–Z`, `a–z`, `0–9`, `.`, `_`, `-`), the server echoes it back.
+- Otherwise the server generates a UUID. Invalid values are replaced silently, never rejected.
+- Unexpected failures (`500 INTERNAL_ERROR`) also include the same ID in the response body, so a reported failure can be matched to the server log line that recorded it:
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "INTERNAL_ERROR",
+    "message": "Unexpected internal error"
+  },
+  "requestId": "985aa8e9-c7ea-4c4d-a051-378587c3f31b"
+}
+```
+
+The server log entry for the same failure is prefixed with `[<requestId>]`. Error details and stack traces appear only in the log, never in the response.
+
+Browser clients can read the header because CORS exposes `X-Request-Id`.
+
 ## How to Run Locally
 
 ### Without Docker
@@ -253,6 +276,19 @@ Coverage is organized into the following areas:
 - **Forced failure handling**
   - Simulated model errors return a generic `INTERNAL_ERROR`.
   - Sensitive strings and stack traces are not exposed to clients.
+  - The failure is logged server-side with the request ID.
+
+#### `requestId.test.ts`
+
+- **Header on every response type**
+  - `200`, `401`, `404`, `400` (validation), `413`, and `400 INVALID_JSON` all include a UUID-format `X-Request-Id`.
+- **Client-supplied IDs**
+  - A safe ID is echoed unchanged.
+  - IDs that are too long or contain disallowed characters are replaced with a generated UUID.
+- **Failure correlation**
+  - A forced `500` returns the same ID in the header and the body.
+  - The server log contains that ID.
+  - The error message is never exposed to the client.
 
 ### Test Database Isolation
 
@@ -312,10 +348,10 @@ The collection automatically:
 Client
   ↓
 app.ts
+  ├── Request ID (X-Request-Id)
   ├── Helmet
   ├── CORS
-  ├── JSON parsing
-  ├── Payload limits
+  ├── JSON parsing (100 kb limit)
   └── Health checks
   ↓
 protect
@@ -334,19 +370,20 @@ Task.ts
 MongoDB
 ```
 
-Errors thrown during request processing are routed to `errorHandler.ts`.
+Errors thrown during request processing, including rejected promises from async controllers, are routed to `errorHandler.ts`.
 
 ### Key Components
 
 | Component | Responsibility |
 |---|---|
-| `app.ts` | Configures the Express application, including proxy settings, Helmet, CORS, JSON body limits, health checks, routes, Swagger UI, the JSON 404 handler, and the error handler. |
+| `app.ts` | Configures the Express application: request IDs first, then proxy settings, Helmet, CORS, JSON body limits, health checks, routes, Swagger UI, the JSON 404 handler, and the error handler. |
 | `server.ts` | Application entry point. Connects to the database, starts the HTTP server, and implements graceful shutdown for `SIGTERM` and `SIGINT`. |
 | `config/db.ts` | Handles database lifecycle, URI validation, connection, `ping` confirmation, and `readyState` checks. |
-| `utils/errorCodes.ts` | Central source of truth for API error codes, including `PAYLOAD_TOO_LARGE` (`413`). |
+| `utils/errorCodes.ts` | Central source of truth for API error codes, including `PAYLOAD_TOO_LARGE` (`413`) and `INVALID_JSON` (`400`). |
 | `utils/validators.ts` | Contains Zod schemas and reusable validation middleware builders. |
+| `middlewares/requestId.ts` | Assigns every request an ID (validated client value or generated UUID) and sets the `X-Request-Id` response header. |
 | `middlewares/protect.ts` | Verifies JWTs using `HS256` and attaches the authenticated user payload. |
-| `middlewares/errorHandler.ts` | Handles Zod validation errors, Express payload-size errors (`413`), and internal errors safely. |
+| `middlewares/errorHandler.ts` | Central error handler. Maps Zod validation errors, malformed JSON (`400`), and oversized payloads (`413`); logs unexpected errors with the request ID and returns a generic `500` that includes only the ID. |
 | `controllers/` | Contains application/business logic. |
 | `routes/` | Contains route definitions and OpenAPI JSDoc documentation. |
 
@@ -355,7 +392,11 @@ Errors thrown during request processing are routed to `errorHandler.ts`.
 - **Consistent error contract:** All endpoints use a structured `{ code, message, details? }` error shape.
 - **Authentication status codes:** Login failures return `401`; duplicate email registration returns `409`.
 - **Register race-condition handling:** Database duplicate-key errors (`11000`) are explicitly detected and converted to `EMAIL_ALREADY_REGISTERED`. Exact user-collection count assertions verify this behavior.
-- **Safe error handling:** Controllers never return caught exception messages directly to clients.
+- **Safe error handling:** Responses never contain caught exception messages or stack traces. Details go only to the server log.
+- **Single error path:** Controllers do not catch unexpected errors. Express 5 forwards rejected promises from async handlers to `errorHandler.ts`, so every unexpected failure is logged with its request ID and answered with the same generic `500`. (This relies on Express 5 behaviour; on Express 4 an unhandled async error would leave the request hanging.) The one exception is `registerUser`, which handles the duplicate-key case itself and rethrows everything else.
+- **Request ID first:** The request-ID middleware runs before every other middleware, so even rejections by the JSON parser (`413`, malformed JSON) carry an `X-Request-Id`.
+- **Untrusted client IDs:** A client-supplied `X-Request-Id` is accepted only if it matches `^[A-Za-z0-9._-]{1,64}$`; anything else is replaced by a UUID. This prevents log injection and oversized headers.
+- **Malformed JSON is a client error:** An unparseable body returns `400 INVALID_JSON`. Previously it fell through to a `500`.
 - **Mass-assignment protection:** Implemented at two layers using Zod field stripping and explicit controller field mapping.
 - **Bounded input:** `description` is limited to 5,000 characters, `limit` to 15, and Express JSON body size limits return `413 PAYLOAD_TOO_LARGE`.
 - **JWT algorithm pinning:** `jwt.verify` explicitly restricts accepted algorithms to `HS256`.
@@ -369,17 +410,3 @@ Errors thrown during request processing are routed to `errorHandler.ts`.
   - **Workaround:** Use a non-SRV MongoDB connection string.
 
 - **Mongoose 9 TypeScript hooks:** Mongoose 9's TypeScript types required adjustments to hook implementations, which have been resolved using pure `async` / `await`.
-
-## Progress Log
-
-- [x] Original build, phases 1–6: core CRUD, validation, authentication, testing/documentation infrastructure, Docker/CI, and deployment.
-- [x] Hardening step 1: unified error shape and corrected status codes (`401` login, `409` duplicate email).
-- [x] Hardening step 2: register race condition handling and prevention of raw error-text leakage.
-- [x] Hardening step 3: JWT algorithm pinning and empty-update-body rejection.
-- [x] Hardening step 4: `GET /api/tasks` pagination with full edge-case coverage.
-- [x] Hardening step 5: CRUD, ownership, mass-assignment, validation, authentication edge-case, and forced-failure test coverage.
-- [x] Hardening step 6: corrected Swagger/OpenAPI JSDoc YAML syntax errors.
-- [x] Hardening step 7: graceful shutdown, `/health/live` + `/health/ready` health-check split, and payload-size limit handling (`413`).
-- [ ] Hardening step 8: build/test isolation fix.
-- [ ] Hardening step 9: full README accuracy pass.
-- [ ] Hardening step 10: clean-clone release rehearsal and tagged release.

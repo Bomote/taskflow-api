@@ -38,38 +38,32 @@ export async function registerUser(req: Request, res: Response): Promise<Respons
     ) {
       return sendError(res, 'EMAIL_ALREADY_REGISTERED');
     }
-    console.error(error);
-    return sendError(res, 'INTERNAL_ERROR');
+    throw error;
   }
 }
 
 export async function loginUser(req: Request, res: Response): Promise<Response> {
   const { email, password } = req.body;
 
-  try {
-    const existingUser = await User.findOne({ email }).select('+password');
+  const existingUser = await User.findOne({ email }).select('+password');
 
-    if (!existingUser) {
-      return sendError(res, 'INVALID_CREDENTIALS');
-    }
-
-    const isMatch = await bcrypt.compare(password, existingUser.password);
-
-    if (!isMatch) {
-      return sendError(res, 'INVALID_CREDENTIALS');
-    }
-
-    const token = jwt.sign({ id: existingUser._id }, jwtSecret, {
-      algorithm: 'HS256',
-      expiresIn: '1h',
-    });
-
-    return res.status(200).json({
-      success: true,
-      data: { token },
-    });
-  } catch (error) {
-    console.error(error);
-    return sendError(res, 'INTERNAL_ERROR');
+  if (!existingUser) {
+    return sendError(res, 'INVALID_CREDENTIALS');
   }
+
+  const isMatch = await bcrypt.compare(password, existingUser.password);
+
+  if (!isMatch) {
+    return sendError(res, 'INVALID_CREDENTIALS');
+  }
+
+  const token = jwt.sign({ id: existingUser._id }, jwtSecret, {
+    algorithm: 'HS256',
+    expiresIn: '1h',
+  });
+
+  return res.status(200).json({
+    success: true,
+    data: { token },
+  });
 }

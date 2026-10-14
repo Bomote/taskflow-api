@@ -585,6 +585,7 @@ test('pagination totals only reflect the authenticated user\'s own tasks', async
 test('returns a generic error and leaks nothing when the database fails unexpectedly', async () => {
   const secretDetail = 'Simulated failure: connection string exposed in this message';
 
+  const logSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
   const spy = jest
     .spyOn(Task, 'find')
     .mockImplementationOnce(() => {
@@ -599,6 +600,7 @@ test('returns a generic error and leaks nothing when the database fails unexpect
   expect(JSON.stringify(response.body)).not.toContain(secretDetail);
 
   spy.mockRestore();
+  logSpy.mockRestore();
 });
 
 // ==========================================

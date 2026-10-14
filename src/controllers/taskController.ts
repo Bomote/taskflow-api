@@ -14,31 +14,25 @@ export async function getTasks(req: Request, res: Response): Promise<Response> {
   }
 
   if (!req.pagination) {
-    return sendError(res, 'INTERNAL_ERROR');
+    throw new Error('Pagination middleware is not applied.');
   }
 
   const { page, limit } = req.pagination;
   const skip = (page - 1) * limit;
 
-  try {
-    const [tasks, total] = await Promise.all([
-      Task.find({ userId: req.user.id }).sort({ createdAt: -1, _id: -1 }).skip(skip).limit(limit),
-      Task.countDocuments({ userId: req.user.id }),
-    ]);
+  const [tasks, total] = await Promise.all([
+    Task.find({ userId: req.user.id }).sort({ createdAt: -1, _id: -1 }).skip(skip).limit(limit),
+    Task.countDocuments({ userId: req.user.id }),
+  ]);
 
-    const totalPages = Math.ceil(total / limit);
+  const totalPages = Math.ceil(total / limit);
 
-    return res.status(200).json({
-      success: true,
-      data: tasks,
-      pagination: { page, limit, total, totalPages },
-    });
-  } catch (error) {
-    if (process.env.NODE_ENV !== 'test') {
-      console.error(error);
-    }
-    return sendError(res, 'INTERNAL_ERROR');
-  }
+  return res.status(200).json({
+    success: true,
+    data: tasks,
+    pagination: { page, limit, total, totalPages },
+  });
+  
 }
 
 export async function createTask(req: Request, res: Response): Promise<Response> {
@@ -48,20 +42,13 @@ export async function createTask(req: Request, res: Response): Promise<Response>
 
   const { title, description, status } = req.body;
 
-  try {
-    const createdTask = await Task.create({
-      title,
-      description,
-      status,
-      userId: req.user.id,
-    });
-    return res.status(201).json({ success: true, data: createdTask });
-  } catch (error) {
-    if (process.env.NODE_ENV !== 'test') {
-      console.error(error);
-    }
-    return sendError(res, 'INTERNAL_ERROR');
-  }
+  const createdTask = await Task.create({
+    title,
+    description,
+    status,
+    userId: req.user.id,
+  });
+  return res.status(201).json({ success: true, data: createdTask });
 }
 
 export async function getTaskById(req: Request, res: Response): Promise<Response> {
@@ -75,20 +62,13 @@ export async function getTaskById(req: Request, res: Response): Promise<Response
     return sendError(res, 'INVALID_ID');
   }
 
-  try {
-    const task = await Task.findOne({ _id: taskId, userId: req.user.id });
+  const task = await Task.findOne({ _id: taskId, userId: req.user.id });
 
-    if (!task) {
-      return sendError(res, 'TASK_NOT_FOUND');
-    }
-
-    return res.status(200).json({ success: true, data: task });
-  } catch (error) {
-    if (process.env.NODE_ENV !== 'test') {
-      console.error(error);
-    }
-    return sendError(res, 'INTERNAL_ERROR');
+  if (!task) {
+    return sendError(res, 'TASK_NOT_FOUND');
   }
+
+  return res.status(200).json({ success: true, data: task });
 }
 
 export async function updateTask(req: Request, res: Response): Promise<Response> {
@@ -106,33 +86,26 @@ export async function updateTask(req: Request, res: Response): Promise<Response>
     return sendError(res, 'EMPTY_UPDATE');
   }
 
-  try {
-    const { title, description, status } = req.body;
-    const allowedUpdates = Object.fromEntries(
-      Object.entries({ title, description, status }).filter(([, value]) => value !== undefined)
-    );
+  const { title, description, status } = req.body;
+  const allowedUpdates = Object.fromEntries(
+    Object.entries({ title, description, status }).filter(([, value]) => value !== undefined)
+  );
 
-    if (Object.keys(allowedUpdates).length === 0) {
-      return sendError(res, 'EMPTY_UPDATE');
-    }
-
-    const updatedTask = await Task.findOneAndUpdate(
-      { _id: taskId, userId: req.user.id },
-      allowedUpdates,
-      { returnDocument: 'after', runValidators: true }
-    );
-
-    if (!updatedTask) {
-      return sendError(res, 'TASK_NOT_FOUND');
-    }
-
-    return res.status(200).json({ success: true, data: updatedTask });
-  } catch (error) {
-    if (process.env.NODE_ENV !== 'test') {
-      console.error(error);
-    }
-    return sendError(res, 'INTERNAL_ERROR');
+  if (Object.keys(allowedUpdates).length === 0) {
+    return sendError(res, 'EMPTY_UPDATE');
   }
+
+  const updatedTask = await Task.findOneAndUpdate(
+    { _id: taskId, userId: req.user.id },
+    allowedUpdates,
+    { returnDocument: 'after', runValidators: true }
+  );
+
+  if (!updatedTask) {
+    return sendError(res, 'TASK_NOT_FOUND');
+  }
+
+  return res.status(200).json({ success: true, data: updatedTask });
 }
 
 export async function deleteTask(req: Request, res: Response): Promise<Response> {
@@ -146,18 +119,11 @@ export async function deleteTask(req: Request, res: Response): Promise<Response>
     return sendError(res, 'INVALID_ID');
   }
 
-  try {
-    const deletedTask = await Task.findOneAndDelete({ _id: taskId, userId: req.user.id });
+  const deletedTask = await Task.findOneAndDelete({ _id: taskId, userId: req.user.id });
 
-    if (!deletedTask) {
-      return sendError(res, 'TASK_NOT_FOUND');
-    }
-
-    return res.status(200).json({ success: true, data: deletedTask });
-  } catch (error) {
-    if (process.env.NODE_ENV !== 'test') {
-      console.error(error);
-    }
-    return sendError(res, 'INTERNAL_ERROR');
+  if (!deletedTask) {
+    return sendError(res, 'TASK_NOT_FOUND');
   }
+
+  return res.status(200).json({ success: true, data: deletedTask });
 }

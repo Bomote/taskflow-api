@@ -8,12 +8,25 @@ export function errorHandler(
   res: Response,
   next: NextFunction
 ) {
+
+  if(res.headersSent) {
+    return next(err);
+  }
+
   if (err instanceof ZodError) {
     const details = err.issues.map((issue) => ({
       field: issue.path.join('.'),
       message: issue.message,
     }));
     return sendError(res, 'VALIDATION_ERROR', details);
+  }
+
+  if (
+    typeof err === 'object' && 
+    err !== null &&
+    'type' in err && (err as any).type === 'entity.parse.failed'
+  ) {
+    return sendError(res, 'INVALID_JSON');
   }
 
   if (
@@ -25,8 +38,6 @@ export function errorHandler(
     return sendError(res, 'PAYLOAD_TOO_LARGE');
   }
 
-  if (process.env.NODE_ENV !== 'test') {
-    console.error(`[${req.id}]`, err);
-  }
+  console.error(`[${req.id}]`, err);
   return sendError(res, 'INTERNAL_ERROR', undefined, { requestId: req.id });
 }
