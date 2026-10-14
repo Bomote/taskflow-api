@@ -31,3 +31,9 @@ jobs:
 
       - name: Run automated tests
         run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Validate OpenAPI document
+        run: npm run openapi:validate
