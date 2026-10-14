@@ -35,39 +35,13 @@ const taskRouter = Router();
  *           default: 10
  *     responses:
  *       200:
- *         description: A paginated list of the caller's tasks
+ *         description: A paginated list of the caller's tasks, newest first
  *         content:
  *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 data:
- *                   type: array
- *                   items:
- *                     type: object
- *                 pagination:
- *                   type: object
- *                   properties:
- *                     page:
- *                       type: integer
- *                     limit:
- *                       type: integer
- *                     total:
- *                       type: integer
- *                     totalPages:
- *                       type: integer
- *       400:
- *         description: Invalid page or limit
- *         content:
- *           application/json:
- *             schema: { $ref: '#/components/schemas/ErrorResponse' }
- *       401:
- *         description: Missing or invalid token
- *         content:
- *           application/json:
- *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *             schema: { $ref: '#/components/schemas/TaskListResponse' }
+ *       400: { $ref: '#/components/responses/BadRequest' }
+ *       401: { $ref: '#/components/responses/Unauthorized' }
+ *       500: { $ref: '#/components/responses/InternalError' }
  */
 taskRouter.get('/', protect, validateQuery(paginationQuerySchema), getTasks);
 
@@ -83,32 +57,17 @@ taskRouter.get('/', protect, validateQuery(paginationQuerySchema), getTasks);
  *       required: true
  *       content:
  *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - title
- *             properties:
- *               title:
- *                 type: string
- *                 minLength: 3
- *               description:
- *                 type: string
- *               status:
- *                 type: string
- *                 enum: [pending, in-progress, completed]
+ *           schema: { $ref: '#/components/schemas/CreateTaskRequest' }
  *     responses:
  *       201:
  *         description: Task created
- *       400:
- *         description: Validation failed
  *         content:
  *           application/json:
- *             schema: { $ref: '#/components/schemas/ErrorResponse' }
- *       401:
- *         description: Missing or invalid token
- *         content:
- *           application/json:
- *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *             schema: { $ref: '#/components/schemas/TaskResponse' }
+ *       400: { $ref: '#/components/responses/BadRequest' }
+ *       401: { $ref: '#/components/responses/Unauthorized' }
+ *       413: { $ref: '#/components/responses/PayloadTooLarge' }
+ *       500: { $ref: '#/components/responses/InternalError' }
  */
 taskRouter.post('/', protect, validateRequest(createTaskSchema), createTask);
 
@@ -121,29 +80,17 @@ taskRouter.post('/', protect, validateRequest(createTaskSchema), createTask);
  *     security:
  *       - bearerAuth: []
  *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
+ *       - $ref: '#/components/parameters/TaskId'
  *     responses:
  *       200:
  *         description: The requested task
- *       400:
- *         description: Invalid ID format
  *         content:
  *           application/json:
- *             schema: { $ref: '#/components/schemas/ErrorResponse' }
- *       401:
- *         description: Missing or invalid token
- *         content:
- *           application/json:
- *             schema: { $ref: '#/components/schemas/ErrorResponse' }
- *       404:
- *         description: Task not found
- *         content:
- *           application/json:
- *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *             schema: { $ref: '#/components/schemas/TaskResponse' }
+ *       400: { $ref: '#/components/responses/BadRequest' }
+ *       401: { $ref: '#/components/responses/Unauthorized' }
+ *       404: { $ref: '#/components/responses/NotFound' }
+ *       500: { $ref: '#/components/responses/InternalError' }
  */
 taskRouter.get('/:id', protect, getTaskById);
 
@@ -152,48 +99,28 @@ taskRouter.get('/:id', protect, getTaskById);
  * /api/tasks/{id}:
  *   put:
  *     summary: Update one of the caller's tasks
+ *     description: Partial update. At least one of title, description or status is required.
  *     tags: [Tasks]
  *     security:
  *       - bearerAuth: []
  *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
+ *       - $ref: '#/components/parameters/TaskId'
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               title:
- *                 type: string
- *                 minLength: 3
- *               description:
- *                 type: string
- *               status:
- *                 type: string
- *                 enum: [pending, in-progress, completed]
+ *           schema: { $ref: '#/components/schemas/UpdateTaskRequest' }
  *     responses:
  *       200:
  *         description: Task updated
- *       400:
- *         description: Invalid ID format or validation failed
  *         content:
  *           application/json:
- *             schema: { $ref: '#/components/schemas/ErrorResponse' }
- *       401:
- *         description: Missing or invalid token
- *         content:
- *           application/json:
- *             schema: { $ref: '#/components/schemas/ErrorResponse' }
- *       404:
- *         description: Task not found
- *         content:
- *           application/json:
- *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *             schema: { $ref: '#/components/schemas/TaskResponse' }
+ *       400: { $ref: '#/components/responses/BadRequest' }
+ *       401: { $ref: '#/components/responses/Unauthorized' }
+ *       404: { $ref: '#/components/responses/NotFound' }
+ *       413: { $ref: '#/components/responses/PayloadTooLarge' }
+ *       500: { $ref: '#/components/responses/InternalError' }
  */
 taskRouter.put('/:id', protect, validateRequest(updateTaskSchema), updateTask);
 
@@ -202,33 +129,22 @@ taskRouter.put('/:id', protect, validateRequest(updateTaskSchema), updateTask);
  * /api/tasks/{id}:
  *   delete:
  *     summary: Delete one of the caller's tasks
+ *     description: Returns the deleted task.
  *     tags: [Tasks]
  *     security:
  *       - bearerAuth: []
  *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
+ *       - $ref: '#/components/parameters/TaskId'
  *     responses:
  *       200:
  *         description: Task deleted
- *       400:
- *         description: Invalid ID format
  *         content:
  *           application/json:
- *             schema: { $ref: '#/components/schemas/ErrorResponse' }
- *       401:
- *         description: Missing or invalid token
- *         content:
- *           application/json:
- *             schema: { $ref: '#/components/schemas/ErrorResponse' }
- *       404:
- *         description: Task not found
- *         content:
- *           application/json:
- *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *             schema: { $ref: '#/components/schemas/TaskResponse' }
+ *       400: { $ref: '#/components/responses/BadRequest' }
+ *       401: { $ref: '#/components/responses/Unauthorized' }
+ *       404: { $ref: '#/components/responses/NotFound' }
+ *       500: { $ref: '#/components/responses/InternalError' }
  */
 taskRouter.delete('/:id', protect, deleteTask);
 

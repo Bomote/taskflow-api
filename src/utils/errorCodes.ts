@@ -12,6 +12,7 @@ export const ERR_CODES = {
   EMPTY_UPDATE: { status: 400, message: 'Update body cannot be empty' },
   PAYLOAD_TOO_LARGE: { status: 413, message: 'Request payload is too large' },
   INVALID_JSON: { status: 400, message: 'Request body is not valid JSON' },
+  TOO_MANY_REQUESTS: { status: 429, message: 'Too many requests, please try again later' },
 } as const;
 
 type ErrorKey = keyof typeof ERR_CODES;

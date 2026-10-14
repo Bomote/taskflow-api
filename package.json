@@ -26,7 +26,8 @@
     "test": "cross-env NODE_OPTIONS=--experimental-vm-modules jest",
     "seed": "node --env-file=.env src/utils/seed.ts",
     "start": "node dist/server.js",
-    "dev": "node --watch --env-file=.env src/server.ts"
+    "dev": "node --watch --env-file=.env src/server.ts",
+    "openapi:validate": "node scripts/validate-openapi.mjs"
   },
   "repository": {
     "type": "git",
@@ -44,7 +45,7 @@
   },
   "homepage": "https://github.com/Bomote/taskflow-api#readme",
   "devDependencies": {
-    "typescript": "^7.0.2",
+    "@apidevtools/swagger-parser": "^13.1.0",
     "@swc/jest": "^0.2.39",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
@@ -57,6 +58,7 @@
     "cross-env": "^10.1.0",
     "jest": "^30.5.1",
     "mongodb-memory-server": "^11.2.0",
-    "supertest": "^7.2.2"
+    "supertest": "^7.2.2",
+    "typescript": "^7.0.2"
   }
 }
