@@ -219,6 +219,43 @@ The test suite runs against an in-memory MongoDB instance, while type checking s
 
 Both checks run automatically in CI on every push or pull request to `main`.
 
+### Demo data seeding
+
+`npm run seed` resets the public demo account to a known state.
+
+**What it deletes and recreates**
+
+- Deletes the user `demo@taskflow.example` (if it exists) and every task belonging to that user.
+- Creates that user again, with four sample tasks.
+- Touches no other user and no other task.
+
+The demo password (`DemoUserPass!123`) is intentionally public so visitors can log in.
+
+**Safeguards**
+
+The script refuses to run unless you opt in explicitly:
+
+- `CONFIRM_SEED` must be exactly `true`. Any other value, or none, is refused.
+- It treats the target as production when `NODE_ENV` is `production` or when the database host is not local (this includes every Atlas connection string). A production target also requires `ALLOW_PRODUCTION_SEED=true`.
+- Refusals happen before any database connection is made, and the connection string is never printed.
+
+**Running it (PowerShell)**
+
+```powershell
+# Local or test database
+$env:CONFIRM_SEED = 'true'
+npm run seed
+Remove-Item Env:CONFIRM_SEED
+
+# Live demo database (Atlas)
+$env:CONFIRM_SEED = 'true'
+$env:ALLOW_PRODUCTION_SEED = 'true'
+npm run seed
+Remove-Item Env:CONFIRM_SEED, Env:ALLOW_PRODUCTION_SEED
+```
+
+The seed script is not part of the production build or Docker image. Run it from a development machine whose `.env` points at the target database.
+
 ### Test Coverage
 
 Tests are located in `src/tests/`.
@@ -338,7 +375,7 @@ The collection automatically:
 - The application is deployed on **Render** using the repository's `Dockerfile`.
 - Environment variables are configured through the Render dashboard.
 - **UptimeRobot** monitors `/health/live` every 5 minutes.
-- `src/utils/seed.ts` resets the live demo to a known-clean state.
+- Demo data can be reset with the seed script; see [Demo data seeding](#demo-data-seeding).
 
 ## Architecture
 
@@ -403,10 +440,13 @@ Errors thrown during request processing, including rejected promises from async 
 - **Empty update protection:** `PUT` requests with an empty body return `400 EMPTY_UPDATE`.
 - **Ownership enforcement:** Task ownership is enforced at the database query level, returning `404` for unauthorized access attempts.
 - **Jest transformation:** `@swc/jest` is used instead of `ts-jest`, with `tsc --noEmit` running as a separate type-check step.
+- **Seed opt-in and production guard:** The seed script requires `CONFIRM_SEED=true` exactly, and production-like targets additionally require `ALLOW_PRODUCTION_SEED=true`. The checks run before any database connection and live in a pure, separately tested module.
+- **Fail-closed host detection:** The seed guard parses the connection string as text (`new URL()` rejects multi-host Atlas URIs). Anything it cannot positively identify as local is treated as production.
+  
 
 ## Known Issues
 
 - **MongoDB SRV DNS resolution on Windows:** Node.js may fail to resolve `mongodb+srv://` DNS SRV records on some Windows configurations.
   - **Workaround:** Use a non-SRV MongoDB connection string.
-
 - **Mongoose 9 TypeScript hooks:** Mongoose 9's TypeScript types required adjustments to hook implementations, which have been resolved using pure `async` / `await`.
+- **Dev-only `npm audit` findings (checked October 2026):** 19 moderate findings remain, all caused by `sprintf-js` (no patched version exists) inside Jest's coverage tooling. They are not in the production image (`npm audit --omit=dev` reports 0), and the only suggested "fix" would downgrade Jest across five major versions. To be re-checked when the Jest toolchain or `sprintf-js` updates.
