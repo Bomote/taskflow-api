@@ -442,7 +442,11 @@ Errors thrown during request processing, including rejected promises from async 
 - **Jest transformation:** `@swc/jest` is used instead of `ts-jest`, with `tsc --noEmit` running as a separate type-check step.
 - **Seed opt-in and production guard:** The seed script requires `CONFIRM_SEED=true` exactly, and production-like targets additionally require `ALLOW_PRODUCTION_SEED=true`. The checks run before any database connection and live in a pure, separately tested module.
 - **Fail-closed host detection:** The seed guard parses the connection string as text (`new URL()` rejects multi-host Atlas URIs). Anything it cannot positively identify as local is treated as production.
-  
+- **Generated, validated API docs:** The OpenAPI document is generated from route comments plus shared components. Error codes, error examples, and the `code` enum are derived from `ERR_CODES`, so docs cannot drift from the code. `X-Request-Id` is added to every documented response automatically.
+- **Docs are a CI gate:** `npm run openapi:validate` checks the *compiled* spec: it must be a valid OpenAPI document, list exactly the expected routes, and follow the documentation policy (500 on every API operation; 400 and 413 on operations with bodies; 401 on authenticated ones; 429 on auth routes).
+- **Fail loudly on bad docs:** `swagger-jsdoc` runs with `failOnErrors`, so a malformed comment stops the app at startup instead of silently removing an endpoint from the docs.
+- **Consistent rate-limit errors:** The auth limiter returns `429 TOO_MANY_REQUESTS` in the standard JSON error shape (the library default is plain text), with a `Retry-After` header.
+- **Entry point and spec endpoint:** `GET /` returns service name, version, deployed commit (when the host provides one) and links; `GET /api-docs.json` serves the raw specification so a deployment can be checked with one request.
 
 ## Known Issues
 
