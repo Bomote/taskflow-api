@@ -24,7 +24,7 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "test": "cross-env NODE_OPTIONS=--experimental-vm-modules jest",
-    "seed": "cross-env CONFIRM_SEED=true node --env-file=.env src/utils/seed.ts",
+    "seed": "node --env-file=.env src/utils/seed.ts",
     "start": "node dist/server.js",
     "dev": "node --watch --env-file=.env src/server.ts"
   },

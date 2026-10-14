@@ -4,7 +4,8 @@
     "src/tests/**/*",
     "src/**/*.test.ts",
     "src/**/*.spec.ts",
-    "src/utils/seed.ts"
+    "src/utils/seed.ts",
+    "src/utils/seedGuard.ts"
   ],
   "compilerOptions": {
     "declaration": false,
