@@ -367,20 +367,27 @@ The documentation is generated from JSDoc comments above the routes and includes
 
 The interface is fully interactive and supports **Try it out** with Bearer-token authentication.
 
-### Postman
+### Postman and smoke tests
 
-The repository includes:
+The repository includes `TaskFlow.postman_collection.json`: 28 requests with assertions covering health, registration, login, the full task lifecycle, and the main error paths. Import it into Postman, or run it from the command line with `npm run smoke`.
 
-```text
-TaskFlow.postman_collection.json
+Each run registers a throwaway user (`smoke.<id>@example.com`), so it works against an empty database and can be repeated safely.
+
+```bash
+npm run smoke                                          # local server
+npm run smoke -- --env-var baseUrl=https://<host>      # deployed server
+npm run smoke -- --env-var baseUrl=<url> --env-var expectedCommit=<sha>
 ```
 
-The collection automatically:
+A run uses about 6 of the 100 auth requests allowed per 15 minutes per IP. The smoke test deliberately does not test rate limiting, because that would lock the runner out of the auth routes for 15 minutes.
 
-1. Generates a fresh random email/password during registration.
-2. Stores the generated credentials in collection variables.
-3. Captures the JWT returned by login.
-4. Captures the ID of newly created tasks.
+To remove leftover smoke users after a failed run:
+
+```javascript
+const ids = db.users.find({ email: /^smoke\..+@example\.com$/ }, { _id: 1 }).toArray().map(u => u._id);
+db.tasks.deleteMany({ userId: { $in: ids } });
+db.users.deleteMany({ _id: { $in: ids } });
+```
 
 ## CI/CD & Deployment
 
@@ -470,7 +477,8 @@ Errors thrown during request processing, including rejected promises from async 
 - **Bcrypt byte limit:** Registration rejects passwords over 72 bytes (not characters) because bcrypt silently ignores everything after that, so a longer password would be weaker than it looks.
 - **One source for the rate limit:** The limit lives in `config/rateLimits.ts` and is used by the limiter, the OpenAPI text and the tests.
 - **Shutdown tested on the build output:** Graceful shutdown is verified end to end against the compiled server in a child process, separate from the unit suites, because signal handling cannot be tested by importing the app.
-
+- **Executable smoke test:** The Postman collection is a repeatable end-to-end check (unique user per run, assertions on every response, no stack traces or missing request IDs) and can verify the deployed commit via `expectedCommit`. It is run with a pinned `npx newman`, not a dependency, to keep the lockfile and audit clean.
+- **Identifiable throwaway data:** Smoke users use a fixed `smoke.` email prefix so leftovers can be found and deleted safely.
 
 ## Known Issues
 

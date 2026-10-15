@@ -28,7 +28,8 @@
     "start": "node dist/server.js",
     "dev": "node --watch --env-file=.env src/server.ts",
     "openapi:validate": "node scripts/validate-openapi.mjs",
-    "test:e2e": "cross-env NODE_OPTIONS=--experimental-vm-modules jest -c jest.e2e.config.js"
+    "test:e2e": "cross-env NODE_OPTIONS=--experimental-vm-modules jest -c jest.e2e.config.js",
+    "smoke": "npx --yes newman@6.2.3 run TaskFlow.postman_collection.json --timeout-request 90000 --bail"
   },
   "repository": {
     "type": "git",

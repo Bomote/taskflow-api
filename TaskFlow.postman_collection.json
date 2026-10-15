@@ -1,24 +1,235 @@
 {
   "info": {
-    "_postman_id": "04a613ad-1e56-44a7-8e31-c7f05c421229",
     "name": "TaskFlow Collection",
-    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "_exporter_id": "56388614",
-    "_collection_link": "https://go.postman.co/collection/56388614-04a613ad-1e56-44a7-8e31-c7f05c421229?source=collection_link"
+    "description": "Smoke test for the TaskFlow API: health, register, login, create, list, get, update, delete, plus error paths and request-ID checks.\n\nRun locally:    npm run smoke\nRun deployed:   npm run smoke -- --env-var baseUrl=https://<host>\nAssert commit:  add --env-var expectedCommit=<sha>\n\nEach run registers a throwaway user (smoke.<id>@example.com). Do not add a rate-limit test to this collection: it would lock the runner out of the auth routes for 15 minutes.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
+  "event": [
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.test('response carries an X-Request-Id header', function () {",
+          "  pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty;",
+          "});",
+          "pm.test('response does not leak stack traces or internals', function () {",
+          "  const text = pm.response.text();",
+          "  pm.expect(text).to.not.include('node_modules');",
+          "  pm.expect(text).to.not.match(/\"stack\"\\s*:/);",
+          "  pm.expect(text).to.not.match(/\\sat\\s[^\\n]*\\(.*:\\d+:\\d+\\)/);",
+          "});"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000"
+    },
+    {
+      "key": "expectedCommit",
+      "value": ""
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "secret"
+    },
+    {
+      "key": "generatedPassword",
+      "value": "",
+      "type": "secret"
+    },
+    {
+      "key": "registeredEmail",
+      "value": ""
+    },
+    {
+      "key": "taskId",
+      "value": ""
+    },
+    {
+      "key": "taskTitle",
+      "value": ""
+    },
+    {
+      "key": "traceId",
+      "value": ""
+    }
+  ],
   "item": [
     {
-      "name": "Auth",
+      "name": "1. Health & meta",
       "item": [
         {
-          "name": "Register a User",
+          "name": "Liveness",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('reports ok', function () { pm.expect(pm.response.json()).to.eql({ status: 'ok' }); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health/live",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health",
+                "live"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Readiness",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('reports ok (database connected)', function () { pm.expect(pm.response.json()).to.eql({ status: 'ok' }); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health/ready",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health",
+                "ready"
+              ]
+            }
+          }
+        },
+        {
+          "name": "API entry point",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "const body = pm.response.json();",
+                  "pm.test('links to the docs and health endpoints', function () {",
+                  "  pm.expect(body.docs).to.eql('/api-docs');",
+                  "  pm.expect(body.openapi).to.eql('/api-docs.json');",
+                  "  pm.expect(body.health).to.eql({ live: '/health/live', ready: '/health/ready' });",
+                  "});",
+                  "pm.test('reports a version', function () { pm.expect(body.version).to.be.a('string').and.not.empty; });",
+                  "const expectedCommit = pm.variables.get('expectedCommit');",
+                  "if (expectedCommit) {",
+                  "  pm.test('deployed commit matches the expected release commit', function () {",
+                  "    pm.expect(body.commit).to.eql(expectedCommit);",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": []
+            },
+            "description": "Optional: run with --env-var expectedCommit=<sha> to assert the deployed commit."
+          }
+        },
+        {
+          "name": "OpenAPI document",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "const spec = pm.response.json();",
+                  "const expectedPaths = ['/', '/health/live', '/health/ready', '/api/auth/register', '/api/auth/login', '/api/tasks', '/api/tasks/{id}'];",
+                  "pm.test('is a non-empty OpenAPI document', function () {",
+                  "  pm.expect(spec.openapi).to.be.a('string');",
+                  "  pm.expect(Object.keys(spec.paths)).to.not.be.empty;",
+                  "});",
+                  "pm.test('documents every route', function () {",
+                  "  pm.expect(Object.keys(spec.paths)).to.have.members(expectedPaths);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api-docs.json",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api-docs.json"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Auth",
+      "item": [
+        {
+          "name": "Register a user",
           "event": [
             {
               "listen": "prerequest",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "function pick(s) {\r\n  return s[Math.floor(Math.random() * s.length)];\r\n}\r\n\r\nconst upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';\r\nconst lower = 'abcdefghijklmnopqrstuvwxyz';\r\nconst number = '0123456789';\r\nconst symbol = '!@#$%^&*';\r\nconst all = upper + lower + number + symbol;\r\n\r\nlet password = [\r\n  pick(upper),\r\n  pick(lower),\r\n  pick(number),\r\n  pick(symbol)\r\n];\r\n\r\nfor (let i = 0; i < 8; i++) {\r\n  password.push(pick(all));\r\n}\r\n\r\npassword = password.sort(() => Math.random() - 0.5).join('');\r\n\r\npm.collectionVariables.set('generatedPassword', password);\r\n\r\nconst requestBody = JSON.parse(pm.request.body.raw);\r\npm.collectionVariables.set('registeredEmail', requestBody.email);\r\npm.collectionVariables.set('registeredPass', requestBody.password);"
+                  "const suffix = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);",
+                  "pm.collectionVariables.set('registeredEmail', 'smoke.' + suffix + '@example.com');",
+                  "// Meets every password rule (upper, lower, digit, special) and stays far below 72 bytes.",
+                  "pm.collectionVariables.set('generatedPassword', 'Sm0ke!' + suffix + 'Aa');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', function () { pm.response.to.have.status(201); });",
+                  "const body = pm.response.json();",
+                  "pm.test('confirms the account was created', function () {",
+                  "  pm.expect(body.success).to.eql(true);",
+                  "  pm.expect(body.message).to.include('created');",
+                  "});",
+                  "pm.test('does not echo the password', function () {",
+                  "  pm.expect(pm.response.text()).to.not.include(pm.collectionVariables.get('generatedPassword'));",
+                  "});"
                 ]
               }
             }
@@ -31,15 +242,6 @@
                 "value": "application/json"
               }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\r\n  \"name\": \"{{$randomUserName}}\",\r\n  \"email\": \"{{$randomEmail}}\",\r\n  \"password\": \"{{generatedPassword}}\"\r\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
             "url": {
               "raw": "{{baseUrl}}/api/auth/register",
               "host": [
@@ -50,19 +252,34 @@
                 "auth",
                 "register"
               ]
+            },
+            "description": "Generates a unique throwaway account (smoke.<id>@example.com) for every run.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Smoke Test\",\n  \"email\": \"{{registeredEmail}}\",\n  \"password\": \"{{generatedPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
-          },
-          "response": []
+          }
         },
         {
-          "name": "Login User",
+          "name": "Register the same email again",
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "const responseBody = pm.response.json();\r\npm.collectionVariables.set('token', responseBody.data.token);"
+                  "pm.test('status is 409', function () { pm.response.to.have.status(409); });",
+                  "const body = pm.response.json();",
+                  "pm.test('uses the standard error shape with code EMAIL_ALREADY_REGISTERED', function () {",
+                  "  pm.expect(body.success).to.eql(false);",
+                  "  pm.expect(body.error.code).to.eql('EMAIL_ALREADY_REGISTERED');",
+                  "  pm.expect(body.error.message).to.be.a('string').and.not.empty;",
+                  "});"
                 ]
               }
             }
@@ -75,15 +292,110 @@
                 "value": "application/json"
               }
             ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register"
+              ]
+            },
             "body": {
               "mode": "raw",
-              "raw": "{\r\n    \"email\":\"testUser@email.com\",\r\n    \"password\":\"TestPass!123\"\r\n}",
+              "raw": "{\n  \"name\": \"Smoke Test\",\n  \"email\": \"{{registeredEmail}}\",\n  \"password\": \"{{generatedPassword}}\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
                 }
               }
+            }
+          }
+        },
+        {
+          "name": "Register with an empty body",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 400', function () { pm.response.to.have.status(400); });",
+                  "const body = pm.response.json();",
+                  "pm.test('uses the standard error shape with code VALIDATION_ERROR', function () {",
+                  "  pm.expect(body.success).to.eql(false);",
+                  "  pm.expect(body.error.code).to.eql('VALIDATION_ERROR');",
+                  "  pm.expect(body.error.message).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.test('lists the invalid fields', function () {",
+                  "  pm.expect(body.error.details).to.be.an('array').that.is.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register"
+              ]
             },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "const body = pm.response.json();",
+                  "pm.test('returns a JWT', function () {",
+                  "  pm.expect(body.success).to.eql(true);",
+                  "  pm.expect(body.data.token).to.match(/^[\\w-]+\\.[\\w-]+\\.[\\w-]+$/);",
+                  "});",
+                  "pm.test('does not echo the password', function () {",
+                  "  pm.expect(pm.response.text()).to.not.include(pm.collectionVariables.get('generatedPassword'));",
+                  "});",
+                  "if (pm.response.code === 200) { pm.collectionVariables.set('token', body.data.token); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/api/auth/login",
               "host": [
@@ -94,17 +406,250 @@
                 "auth",
                 "login"
               ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{registeredEmail}}\",\n  \"password\": \"{{generatedPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
-          },
-          "response": []
+          }
+        },
+        {
+          "name": "Login with a wrong password",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 401', function () { pm.response.to.have.status(401); });",
+                  "const body = pm.response.json();",
+                  "pm.test('uses the standard error shape with code INVALID_CREDENTIALS', function () {",
+                  "  pm.expect(body.success).to.eql(false);",
+                  "  pm.expect(body.error.code).to.eql('INVALID_CREDENTIALS');",
+                  "  pm.expect(body.error.message).to.be.a('string').and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{registeredEmail}}\",\n  \"password\": \"Wrong!Pass123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
         }
       ]
     },
     {
-      "name": "Tasks",
+      "name": "3. Tasks",
       "item": [
         {
-          "name": "Get Caller's Tasks",
+          "name": "List tasks without a token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 401', function () { pm.response.to.have.status(401); });",
+                  "const body = pm.response.json();",
+                  "pm.test('uses the standard error shape with code UNAUTHORIZED', function () {",
+                  "  pm.expect(body.success).to.eql(false);",
+                  "  pm.expect(body.error.code).to.eql('UNAUTHORIZED');",
+                  "  pm.expect(body.error.message).to.be.a('string').and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tasks",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tasks"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create a task",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('taskTitle', 'Smoke task ' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', function () { pm.response.to.have.status(201); });",
+                  "const body = pm.response.json();",
+                  "pm.test('returns the created task', function () {",
+                  "  pm.expect(body.success).to.eql(true);",
+                  "  pm.expect(body.data._id).to.match(/^[0-9a-f]{24}$/);",
+                  "  pm.expect(body.data.title).to.eql(pm.collectionVariables.get('taskTitle'));",
+                  "  pm.expect(body.data.status).to.eql('pending');",
+                  "  pm.expect(body.data.userId).to.be.a('string').and.not.empty;",
+                  "});",
+                  "if (pm.response.code === 201) { pm.collectionVariables.set('taskId', body.data._id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tasks",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tasks"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"{{taskTitle}}\",\n  \"description\": \"Created by the smoke test\",\n  \"status\": \"pending\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Create a task with a too-short title",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 400', function () { pm.response.to.have.status(400); });",
+                  "const body = pm.response.json();",
+                  "pm.test('uses the standard error shape with code VALIDATION_ERROR', function () {",
+                  "  pm.expect(body.success).to.eql(false);",
+                  "  pm.expect(body.error.code).to.eql('VALIDATION_ERROR');",
+                  "  pm.expect(body.error.message).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.test('points at the title field', function () {",
+                  "  pm.expect(body.error.details.map(function (d) { return d.field; })).to.include('title');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tasks",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tasks"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"ab\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "List tasks",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "const body = pm.response.json();",
+                  "pm.test('contains the created task', function () {",
+                  "  pm.expect(body.data.map(function (t) { return t._id; })).to.include(pm.collectionVariables.get('taskId'));",
+                  "});",
+                  "pm.test('includes pagination for a brand-new user', function () {",
+                  "  pm.expect(body.pagination).to.eql({ page: 1, limit: 10, total: 1, totalPages: 1 });",
+                  "});"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "header": [
@@ -127,24 +672,28 @@
                 "tasks"
               ]
             }
-          },
-          "response": []
+          }
         },
         {
-          "name": "Create New Task",
+          "name": "List tasks with a custom page size",
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "const responseBody = pm.response.json();\r\npm.collectionVariables.set('taskId', responseBody.data._id);"
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "const body = pm.response.json();",
+                  "pm.test('honours the requested limit', function () {",
+                  "  pm.expect(body.data).to.have.lengthOf(1);",
+                  "  pm.expect(body.pagination.limit).to.eql(1);",
+                  "});"
                 ]
               }
             }
           ],
           "request": {
-            "method": "POST",
+            "method": "GET",
             "header": [
               {
                 "key": "Content-Type",
@@ -155,30 +704,95 @@
                 "value": "Bearer {{token}}"
               }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\r\n    \"title\": \"New Task {{$timestamp}}\",\r\n    \"description\": \"Creating a new task\",\r\n    \"status\": \"pending\"\r\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
             "url": {
-              "raw": "{{baseUrl}}/api/tasks",
+              "raw": "{{baseUrl}}/api/tasks?page=1&limit=1",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "tasks"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "1"
+                }
               ]
             }
-          },
-          "response": []
+          }
         },
         {
-          "name": "Get Task by ID",
+          "name": "List tasks with an out-of-range limit",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 400', function () { pm.response.to.have.status(400); });",
+                  "const body = pm.response.json();",
+                  "pm.test('uses the standard error shape with code VALIDATION_ERROR', function () {",
+                  "  pm.expect(body.success).to.eql(false);",
+                  "  pm.expect(body.error.code).to.eql('VALIDATION_ERROR');",
+                  "  pm.expect(body.error.message).to.be.a('string').and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tasks?limit=100",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tasks"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "100"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get a task by ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "const body = pm.response.json();",
+                  "pm.test('returns the requested task', function () {",
+                  "  pm.expect(body.success).to.eql(true);",
+                  "  pm.expect(body.data._id).to.eql(pm.collectionVariables.get('taskId'));",
+                  "});"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "header": [
@@ -202,11 +816,115 @@
                 "{{taskId}}"
               ]
             }
-          },
-          "response": []
+          }
         },
         {
-          "name": "Update Task by ID",
+          "name": "Get a task with a malformed ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 400', function () { pm.response.to.have.status(400); });",
+                  "const body = pm.response.json();",
+                  "pm.test('uses the standard error shape with code INVALID_ID', function () {",
+                  "  pm.expect(body.success).to.eql(false);",
+                  "  pm.expect(body.error.code).to.eql('INVALID_ID');",
+                  "  pm.expect(body.error.message).to.be.a('string').and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tasks/not-an-id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tasks",
+                "not-an-id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get a task that does not exist",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 404', function () { pm.response.to.have.status(404); });",
+                  "const body = pm.response.json();",
+                  "pm.test('uses the standard error shape with code TASK_NOT_FOUND', function () {",
+                  "  pm.expect(body.success).to.eql(false);",
+                  "  pm.expect(body.error.code).to.eql('TASK_NOT_FOUND');",
+                  "  pm.expect(body.error.message).to.be.a('string').and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tasks/000000000000000000000000",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tasks",
+                "000000000000000000000000"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update a task",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "const body = pm.response.json();",
+                  "pm.test('applies the change and keeps the rest', function () {",
+                  "  pm.expect(body.data._id).to.eql(pm.collectionVariables.get('taskId'));",
+                  "  pm.expect(body.data.status).to.eql('in-progress');",
+                  "  pm.expect(body.data.title).to.eql(pm.collectionVariables.get('taskTitle'));",
+                  "});"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "PUT",
             "header": [
@@ -219,15 +937,6 @@
                 "value": "Bearer {{token}}"
               }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\r\n    \"status\": \"in-progress\"\r\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
             "url": {
               "raw": "{{baseUrl}}/api/tasks/{{taskId}}",
               "host": [
@@ -238,12 +947,142 @@
                 "tasks",
                 "{{taskId}}"
               ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"in-progress\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
-          },
-          "response": []
+          }
         },
         {
-          "name": "Delete Task by ID",
+          "name": "Update a task with an empty body",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 400', function () { pm.response.to.have.status(400); });",
+                  "const body = pm.response.json();",
+                  "pm.test('uses the standard error shape with code EMPTY_UPDATE', function () {",
+                  "  pm.expect(body.success).to.eql(false);",
+                  "  pm.expect(body.error.code).to.eql('EMPTY_UPDATE');",
+                  "  pm.expect(body.error.message).to.be.a('string').and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tasks/{{taskId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tasks",
+                "{{taskId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Update a task with an invalid status",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 400', function () { pm.response.to.have.status(400); });",
+                  "const body = pm.response.json();",
+                  "pm.test('uses the standard error shape with code VALIDATION_ERROR', function () {",
+                  "  pm.expect(body.success).to.eql(false);",
+                  "  pm.expect(body.error.code).to.eql('VALIDATION_ERROR');",
+                  "  pm.expect(body.error.message).to.be.a('string').and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tasks/{{taskId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tasks",
+                "{{taskId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"done\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Delete a task",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "const body = pm.response.json();",
+                  "pm.test('returns the deleted task', function () {",
+                  "  pm.expect(body.success).to.eql(true);",
+                  "  pm.expect(body.data._id).to.eql(pm.collectionVariables.get('taskId'));",
+                  "});"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "DELETE",
             "header": [
@@ -267,54 +1106,282 @@
                 "{{taskId}}"
               ]
             }
-          },
-          "response": []
+          }
+        },
+        {
+          "name": "Get the deleted task",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 404', function () { pm.response.to.have.status(404); });",
+                  "const body = pm.response.json();",
+                  "pm.test('uses the standard error shape with code TASK_NOT_FOUND', function () {",
+                  "  pm.expect(body.success).to.eql(false);",
+                  "  pm.expect(body.error.code).to.eql('TASK_NOT_FOUND');",
+                  "  pm.expect(body.error.message).to.be.a('string').and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tasks/{{taskId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tasks",
+                "{{taskId}}"
+              ]
+            }
+          }
         }
       ]
     },
     {
-      "name": "Health Check",
-      "request": {
-        "method": "GET",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
-        ],
-        "url": {
-          "raw": "{{baseUrl}}/health",
-          "host": [
-            "{{baseUrl}}"
+      "name": "4. Error handling & request IDs",
+      "item": [
+        {
+          "name": "Unknown route",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 404', function () { pm.response.to.have.status(404); });",
+                  "const body = pm.response.json();",
+                  "pm.test('uses the standard error shape with code ROUTE_NOT_FOUND', function () {",
+                  "  pm.expect(body.success).to.eql(false);",
+                  "  pm.expect(body.error.code).to.eql('ROUTE_NOT_FOUND');",
+                  "  pm.expect(body.error.message).to.be.a('string').and.not.empty;",
+                  "});"
+                ]
+              }
+            }
           ],
-          "path": [
-            "health"
-          ]
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/does-not-exist",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "does-not-exist"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Malformed JSON body",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 400', function () { pm.response.to.have.status(400); });",
+                  "const body = pm.response.json();",
+                  "pm.test('uses the standard error shape with code INVALID_JSON', function () {",
+                  "  pm.expect(body.success).to.eql(false);",
+                  "  pm.expect(body.error.code).to.eql('INVALID_JSON');",
+                  "  pm.expect(body.error.message).to.be.a('string').and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{bad json}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Oversized body",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.request.body.update(JSON.stringify({ title: 'x'.repeat(150000) }));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 413', function () { pm.response.to.have.status(413); });",
+                  "const body = pm.response.json();",
+                  "pm.test('uses the standard error shape with code PAYLOAD_TOO_LARGE', function () {",
+                  "  pm.expect(body.success).to.eql(false);",
+                  "  pm.expect(body.error.code).to.eql('PAYLOAD_TOO_LARGE');",
+                  "  pm.expect(body.error.message).to.be.a('string').and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tasks",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tasks"
+              ]
+            },
+            "description": "Rejected by the 100 kb body limit before authentication and before the auth rate limiter.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Request ID is echoed",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('traceId', 'smoke-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('echoes a safe client-supplied request ID', function () {",
+                  "  pm.expect(pm.response.headers.get('X-Request-Id')).to.eql(pm.collectionVariables.get('traceId'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "{{traceId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/health/live",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health",
+                "live"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Unsafe request ID is replaced",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('replaces it with a generated UUID', function () {",
+                  "  const id = pm.response.headers.get('X-Request-Id');",
+                  "  pm.expect(id).to.not.eql('not a safe id!');",
+                  "  pm.expect(id).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "not a safe id!"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/health/live",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health",
+                "live"
+              ]
+            }
+          }
         }
-      },
-      "response": []
-    }
-  ],
-  "variable": [
-    {
-      "key": "baseUrl",
-      "value": "http://localhost:5000"
-    },
-    {
-      "key": "token",
-      "secret": true
-    },
-    {
-      "key": "taskId",
-      "value": ""
-    },
-    {
-      "key": "registeredEmail",
-      "value": ""
-    },
-    {
-      "key": "generatedPassword",
-      "value": ""
+      ]
     }
   ]
 }
