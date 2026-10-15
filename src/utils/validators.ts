@@ -11,6 +11,7 @@ export const registerSchema = z.object({
   name: z.string().min(2),
   email: z.email(),
   password: z.string().min(8, "Password must be at least 8 characters")
+  .refine((value) => Buffer.byteLength(value, 'utf8') <= 72, "Password must be at most 72 bytes")
   .regex(/[A-Z]/, "Must contain one uppercase letter")
   .regex(/[a-z]/,"Must contain one lowercase letter")
   .regex(/[0-9]/, "Must contain a number")

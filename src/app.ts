@@ -9,12 +9,13 @@ import { errorHandler } from './middlewares/errorHandler.ts';
 import { swaggerSpec, swaggerUiServe, swaggerUiSetup } from './config/swagger.ts';
 import { sendError } from './utils/errorCodes.ts';
 import { requestId } from './middlewares/requestId.ts';
+import { AUTH_RATE_LIMITS } from './config/rateLimits.ts';
 
 const app = express();
 
 const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  limit: 100,
+  windowMs: AUTH_RATE_LIMITS.windowMs,
+  limit: AUTH_RATE_LIMITS.limit,
   standardHeaders: 'draft-8',
   legacyHeaders: false,
   handler: (_req, res) => sendError(res, 'TOO_MANY_REQUESTS'),

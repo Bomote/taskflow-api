@@ -4,6 +4,7 @@ import swaggerJsdoc from 'swagger-jsdoc';
 import swaggerUi from 'swagger-ui-express';
 import { appInfo } from './appInfo.ts';
 import { ERR_CODES } from '../utils/errorCodes.ts';
+import { AUTH_RATE_LIMITS } from './rateLimits.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -110,7 +111,7 @@ const options: swaggerJsdoc.Options = {
         PayloadTooLarge: errorResponse(413, 'The request body exceeds the 100 kb limit.'),
         TooManyRequests: errorResponse(
           429,
-          'Auth rate limit exceeded (100 requests per 15 minutes per IP, shared by register and login).',
+                    `Auth rate limit exceeded (${AUTH_RATE_LIMITS.limit} requests per ${AUTH_RATE_LIMITS.windowMs / 60_000} minutes per IP, shared by register and login).`,
           {
             headers: {
               'Retry-After': {
@@ -223,7 +224,8 @@ const options: swaggerJsdoc.Options = {
               type: 'string',
               minLength: 8,
               description:
-                'At least 8 characters, with at least one uppercase letter, one lowercase letter, one number and one special character.',
+                'At least 8 characters and at most 72 bytes when encoded as UTF-8 (bcrypt ignores anything beyond 72 bytes), ' +
+                'with at least one uppercase letter, one lowercase letter, one number and one special character.',
             },
           },
         },
