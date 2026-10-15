@@ -327,6 +327,26 @@ Coverage is organized into the following areas:
   - The server log contains that ID.
   - The error message is never exposed to the client.
 
+
+#### `health.test.ts`
+
+- **Liveness:** `200 { status: ok }`, and it stays `200` while the database is disconnected.
+- **Readiness:** `503 { status: unavailable }` when never connected and while a connection attempt is in progress; `200` while connected and `503` again after disconnecting (real connection states, no mocks).
+
+#### `rateLimit.test.ts`
+
+- After the configured allowance is used, the next auth request returns `429 TOO_MANY_REQUESTS` in the standard JSON shape, with `Retry-After` and `X-Request-Id`.
+- The allowance is shared by login and register, and routes outside `/api/auth` are not limited.
+
+#### `validators.test.ts`
+
+- Registration passwords are limited to 72 **bytes** (bcrypt ignores the rest). Boundary cases: exactly 72 accepted, 73 rejected, multi-byte characters counted by byte size.
+
+#### `e2e/shutdown.e2e.test.ts` (run with `npm run test:e2e` after `npm run build`)
+
+- Starts the compiled `dist/server.js` as a real process, confirms it is ready, sends `SIGTERM` / `SIGINT`, and asserts exit code `0`, the HTTP and database close log lines, and that the port stops accepting connections. Skipped on Windows (no real SIGTERM); runs in CI.
+
+
 ### Test Database Isolation
 
 A `globalSetup` / `globalTeardown` pair starts a fresh `mongodb-memory-server` instance once per test run.
@@ -447,6 +467,10 @@ Errors thrown during request processing, including rejected promises from async 
 - **Fail loudly on bad docs:** `swagger-jsdoc` runs with `failOnErrors`, so a malformed comment stops the app at startup instead of silently removing an endpoint from the docs.
 - **Consistent rate-limit errors:** The auth limiter returns `429 TOO_MANY_REQUESTS` in the standard JSON error shape (the library default is plain text), with a `Retry-After` header.
 - **Entry point and spec endpoint:** `GET /` returns service name, version, deployed commit (when the host provides one) and links; `GET /api-docs.json` serves the raw specification so a deployment can be checked with one request.
+- **Bcrypt byte limit:** Registration rejects passwords over 72 bytes (not characters) because bcrypt silently ignores everything after that, so a longer password would be weaker than it looks.
+- **One source for the rate limit:** The limit lives in `config/rateLimits.ts` and is used by the limiter, the OpenAPI text and the tests.
+- **Shutdown tested on the build output:** Graceful shutdown is verified end to end against the compiled server in a child process, separate from the unit suites, because signal handling cannot be tested by importing the app.
+
 
 ## Known Issues
 
