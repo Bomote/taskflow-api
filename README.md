@@ -177,19 +177,22 @@ Browser clients can read the header because CORS exposes `X-Request-Id`.
 
 ### With Docker
 
-1. Complete steps 1–3 above.
+Requires Docker with Compose v2. This starts the production image together with a disposable MongoDB, so no Atlas account or `.env` file is needed:
 
-2. Build the Docker image:
+```bash
+docker compose up --build --detach --wait
+npm run smoke                       # 28-request end-to-end check against the container
+docker compose down --volumes       # removes the containers and their data
+```
 
-   ```bash
-   docker build -t taskflow-api .
-   ```
+Stop any local `npm run dev` first: both use port 5000.
 
-3. Run the container:
+To run the image against your own database instead:
 
-   ```bash
-   docker run -p 5000:5000 --env-file .env taskflow-api
-   ```
+```bash
+docker build -t taskflow-api .
+docker run -p 5000:5000 --env-file .env taskflow-api
+```
 
 ### Explore the API
 
@@ -391,15 +394,11 @@ db.users.deleteMany({ _id: { $in: ids } });
 
 ## CI/CD & Deployment
 
-- `.github/workflows/ci.yml` runs on every push and pull request to `main`.
-- CI pipeline:
-  1. Checkout repository.
-  2. Set up Node.js.
-  3. Run `npm ci`.
-  4. Run `npm run typecheck`.
-  5. Run `npm test`.
-- `JWT_SECRET` is provided through a GitHub Actions repository secret.
-- The application is deployed on **Render** using the repository's `Dockerfile`.
+- `.github/workflows/ci.yml` runs on every push and pull request to `main`, in two jobs:
+  1. **Verify:** install (`npm ci`), production dependency audit (fails on high or critical), typecheck, unit and integration tests, build, compiled-app end-to-end tests (graceful shutdown), and OpenAPI validation.
+  2. **Docker:** builds the production image, starts it with a disposable MongoDB through `compose.yaml`, then checks that it runs as non-root with no source or test files, reports healthy, passes the Postman smoke test (including that `GET /` reports the commit under test), and shuts down cleanly on `SIGTERM`.
+- The Node.js version (24) is the same in `package.json` (`engines`), the Dockerfile, and CI.
+- The application is deployed on **Render** using the repository's `Dockerfile`; Render does not use the Dockerfile's `HEALTHCHECK`, so its health check path is set to `/health/live` in the dashboard.
 - Environment variables are configured through the Render dashboard.
 - **UptimeRobot** monitors `/health/live` every 5 minutes.
 - Demo data can be reset with the seed script; see [Demo data seeding](#demo-data-seeding).
@@ -479,6 +478,9 @@ Errors thrown during request processing, including rejected promises from async 
 - **Shutdown tested on the build output:** Graceful shutdown is verified end to end against the compiled server in a child process, separate from the unit suites, because signal handling cannot be tested by importing the app.
 - **Executable smoke test:** The Postman collection is a repeatable end-to-end check (unique user per run, assertions on every response, no stack traces or missing request IDs) and can verify the deployed commit via `expectedCommit`. It is run with a pinned `npx newman`, not a dependency, to keep the lockfile and audit clean.
 - **Identifiable throwaway data:** Smoke users use a fixed `smoke.` email prefix so leftovers can be found and deleted safely.
+- **The image is verified, not assumed:** CI builds the real production image and checks it (non-root, no source or tests, no dev dependencies, healthy, smoke-tested, clean shutdown) on every change, because that same Dockerfile is what Render builds.
+- **Install scripts are off in the image:** Production dependencies are installed with `--ignore-scripts`; none of them needs one, and this avoids running third-party code (such as an analytics reporter) at build time.
+- **One Node version everywhere:** `engines`, the Dockerfile base image and CI all use Node 24, so a green build means the deployed runtime was tested.
 
 ## Known Issues
 
