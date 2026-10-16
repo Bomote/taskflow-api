@@ -1,4 +1,22 @@
+# Dependencies and build output are recreated inside the image
 node_modules
-.env
 dist
-tests
+
+# Secrets and local configuration
+.env
+.env.*
+
+# Repository metadata and documentation
+.git
+.github
+*.md
+LICENSE.txt
+
+# Tests, scripts and tooling that the production image never needs
+src/tests
+scripts
+jest*.config.js
+TaskFlow.postman_collection.json
+Dockerfile
+.dockerignore
+compose.yaml

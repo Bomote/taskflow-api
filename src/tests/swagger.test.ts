@@ -68,4 +68,36 @@ describe('GET /', () => {
     expect(typeof response.body.version).toBe('string');
     expect(response.headers['x-request-id']).toBeDefined();
   });
+
+  describe('deployed commit', () => {
+    const original = process.env.RENDER_GIT_COMMIT;
+
+    afterEach(() => {
+      if (original === undefined) {
+        delete process.env.RENDER_GIT_COMMIT;
+      } else {
+        process.env.RENDER_GIT_COMMIT = original;
+      }
+    });
+
+    test('is reported when the host provides one', async () => {
+      process.env.RENDER_GIT_COMMIT = 'abc123def456';
+
+      const response = await request(app).get('/');
+
+      expect(response.body.commit).toBe('abc123def456');
+    });
+
+    test.each([['unset', undefined], ['empty', '']])('is null when %s', async (_label, value) => {
+      if (value === undefined) {
+        delete process.env.RENDER_GIT_COMMIT;
+      } else {
+        process.env.RENDER_GIT_COMMIT = value;
+      }
+
+      const response = await request(app).get('/');
+
+      expect(response.body.commit).toBeNull();
+    });
+  });
 });
