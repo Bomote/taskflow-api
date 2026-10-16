@@ -2,41 +2,100 @@ name: Code Testing and CI
 
 on:
   push:
-    branches: [ "main", "developer" ]
+    branches: ["main", "developer"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "24"
+  MONGOMS_DOWNLOAD_DIR: ${{ github.workspace }}/.mongodb-binaries
+
 jobs:
-  build-and-test:
+  verify:
+    name: Verify (audit, typecheck, tests, build, OpenAPI)
     runs-on: ubuntu-latest
-    env:
-      JWT_SECRET: ${{ secrets.JWT_SECRET }}
 
     steps:
       - name: Checkout repo code
         uses: actions/checkout@v4
 
-      - name: Set up Node.js environment
+      - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '24'
-          cache: 'npm'
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Cache the MongoDB test binary
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.MONGOMS_DOWNLOAD_DIR }}
+          key: mongodb-binaries-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Run typecheck
+      - name: Production dependency audit (fails on high or critical)
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Full dependency audit (informational, known dev-only findings)
+        run: npm audit
+        continue-on-error: true
+
+      - name: Typecheck
         run: npm run typecheck
 
-      - name: Run automated tests
+      - name: Unit and integration tests
         run: npm test
 
       - name: Build
         run: npm run build
 
-      - name: Run compiled-app end-to-end tests
+      - name: Compiled-app end-to-end tests
         run: npm run test:e2e
 
       - name: Validate OpenAPI document
         run: npm run openapi:validate
+
+  docker:
+    name: Docker (image, health, smoke test, shutdown)
+    needs: verify
+    runs-on: ubuntu-latest
+    env:
+      RENDER_GIT_COMMIT: ${{ github.sha }}
+
+    steps:
+      - name: Checkout repo code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js (for the smoke test runner)
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Build the image and start it with a disposable MongoDB
+        run: docker compose up --build --detach --wait --wait-timeout 120
+
+      - name: Verify the runtime image
+        run: bash scripts/verify-docker-image.sh static
+
+      - name: Smoke test the container
+        run: npm run smoke -- --env-var baseUrl=http://localhost:5000 --env-var expectedCommit=${{ github.sha }}
+
+      - name: Verify graceful shutdown
+        run: bash scripts/verify-docker-image.sh shutdown
+
+      - name: Show container logs on failure
+        if: failure()
+        run: docker compose logs --no-color
+
+      - name: Tear down
+        if: always()
+        run: docker compose down --volumes

@@ -1,0 +1,30 @@
+# Reproducible rehearsal: the production image plus a disposable MongoDB.
+#
+#   docker compose up --build --detach --wait
+#   npm run smoke
+#   docker compose down --volumes
+#
+# Nothing here is a real secret and there is no volume: the data disappears with the containers.
+services:
+  mongo:
+    image: mongo:7
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  api:
+    build: .
+    depends_on:
+      mongo:
+        condition: service_healthy
+    environment:
+      MONGODB_URI: mongodb://mongo:27017/taskflow
+      JWT_SECRET: compose-rehearsal-secret-not-for-production
+      PORT: "5000"
+      # Lets the smoke test prove which commit is running (empty when unset).
+      RENDER_GIT_COMMIT: ${RENDER_GIT_COMMIT:-}
+    ports:
+      - "5000:5000"

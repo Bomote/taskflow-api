@@ -22,7 +22,7 @@ metaRouter.get('/', (_req, res) => {
   res.status(200).json({
     name: appInfo.name,
     version: appInfo.version,
-    commit: process.env.RENDER_GIT_COMMIT ?? null,
+    commit: process.env.RENDER_GIT_COMMIT || null,
     docs: '/api-docs',
     openapi: '/api-docs.json',
     health: { live: '/health/live', ready: '/health/ready' },
