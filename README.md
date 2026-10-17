@@ -2,12 +2,15 @@
 
 A REST API for task management, built as a portfolio project demonstrating production-grade Node.js/TypeScript backend practices, including clean architecture, input validation, authentication, automated testing, and containerized deployment.
 
-> 🚧 **Current status:** Mid-hardening pass following an external code review. Core error contracts, pagination, test coverage, liveness/readiness health checks, and graceful shutdown are complete. Container hardening and release verification are still in progress. See the [Progress Log](#progress-log) for the exact status.
+[![CI](https://github.com/Bomote/taskflow-api/actions/workflows/ci.yml/badge.svg)](https://github.com/Bomote/taskflow-api/actions/workflows/ci.yml)
+
+> **Status:** Version 1.0.0. The hardening pass that followed an external code review is complete. Each tagged release has a verification record (fresh-clone checks, test and audit results, Docker checks, and a live smoke test) on the [Releases page](https://github.com/Bomote/taskflow-api/releases). See the [Progress Log](#progress-log) for the history.
 
 ## Live Demo
 
-- **API:** https://taskflow-api-l7hr.onrender.com/
+- **API entry point (JSON metadata):** https://taskflow-api-l7hr.onrender.com/
 - **Interactive docs (Swagger):** https://taskflow-api-l7hr.onrender.com/api-docs
+- **OpenAPI document (JSON):** https://taskflow-api-l7hr.onrender.com/api-docs.json
 - **Health checks:**
   - **Liveness:** https://taskflow-api-l7hr.onrender.com/health/live
   - **Readiness:** https://taskflow-api-l7hr.onrender.com/health/ready
@@ -32,6 +35,8 @@ A REST API for task management, built as a portfolio project demonstrating produ
 
 | Method | Path | Description | Auth Required |
 |---|---|---|---|
+| `GET` | `/` | Service name, version, deployed commit, and links | No |
+| `GET` | `/api-docs.json` | The OpenAPI document | No |
 | `GET` | `/health/live` | Liveness health check | No |
 | `GET` | `/health/ready` | Readiness health check, including DB connectivity | No |
 | `POST` | `/api/auth/register` | Register a new user | No |
@@ -44,7 +49,7 @@ A REST API for task management, built as a portfolio project demonstrating produ
 
 Task routes require an `Authorization: Bearer <token>` header obtained from `/api/auth/login`.
 
-Authentication routes (`/api/auth/*`) are rate-limited to **100 requests per 15 minutes per client**.
+Authentication routes (`/api/auth/*`) are rate-limited to **100 requests per 15 minutes per client IP**. Over the limit they return `429` with the code `TOO_MANY_REQUESTS` in the standard error shape, plus a `Retry-After` header.
 
 ### Task Validation
 
@@ -54,6 +59,12 @@ Authentication routes (`/api/auth/*`) are rate-limited to **100 requests per 15 
   - `pending`
   - `in-progress`
   - `completed`
+
+### Registration Validation
+
+- `name` must contain at least 2 characters.
+- `email` must be a valid email address.
+- `password` must be at least 8 characters and at most 72 bytes (UTF-8; bcrypt ignores anything beyond 72 bytes), and must contain an uppercase letter, a lowercase letter, a number, and a special character.
 
 ## Pagination
 
@@ -147,27 +158,21 @@ Browser clients can read the header because CORS exposes `X-Request-Id`.
 
 2. Install dependencies:
 
-   ```bash
-   npm install
-   ```
+```bash
+   npm ci
+```
 
-3. Copy `.env.example` to `.env` and provide:
-   - Your MongoDB Atlas connection string.
-   - A generated `JWT_SECRET`.
+3. Copy `.env.example` to `.env` and provide your MongoDB Atlas connection string and a generated `JWT_SECRET` (`openssl rand -hex 32`).
 
-   Generate a secure secret with:
+   > **Which connection string?** Atlas offers two formats. The `mongodb+srv://` string is the default and works on most networks. If its DNS SRV lookup fails (see [Known Issues](#known-issues)), use the standard `mongodb://` string with explicit hosts instead; in Atlas this is typically shown under Connect → Drivers when you pick an older driver version. For local work, use a separate database name (for example `/taskflow_dev`), because the smoke test creates throwaway users.
 
-   ```bash
-   openssl rand -hex 32
-   ```
+4. Start the server with automatic restarts on file changes:
 
-   > **Windows note:** If you encounter `ECONNREFUSED` during a DNS SRV lookup despite having a correct connection string, see [Known Issues](#known-issues).
+```bash
+   npm run dev
+```
 
-4. Start the server:
-
-   ```bash
-   node --env-file=.env src/server.ts
-   ```
+   For a production-style run: `npm run build`, then `node --env-file=.env dist/server.js`.
 
 5. Confirm that the API is running:
 
@@ -220,7 +225,15 @@ npm run typecheck
 
 The test suite runs against an in-memory MongoDB instance, while type checking separately covers both application and test files.
 
-Both checks run automatically in CI on every push or pull request to `main`.
+Other checks:
+
+```bash
+npm run build && npm run test:e2e        # compiled-app graceful-shutdown test (skipped on Windows; runs in CI)
+npm run openapi:validate                 # validates the compiled OpenAPI document
+npm run smoke                            # 28-request end-to-end check against a running server
+```
+
+All of these run in CI; see [CI/CD & Deployment](#cicd--deployment). Test counts are intentionally not hard-coded here; each release's verification record on the Releases page has the exact numbers.
 
 ### Demo data seeding
 
@@ -349,6 +362,22 @@ Coverage is organized into the following areas:
 
 - Starts the compiled `dist/server.js` as a real process, confirms it is ready, sends `SIGTERM` / `SIGINT`, and asserts exit code `0`, the HTTP and database close log lines, and that the port stops accepting connections. Skipped on Windows (no real SIGTERM); runs in CI.
 
+#### `swagger.test.ts`
+
+- The OpenAPI document lists exactly the expected paths and methods and is valid.
+- Error codes in the docs are derived from the real error codes.
+- `GET /api-docs.json` serves the non-empty spec; `GET /` returns metadata and the deployed commit (or `null`).
+
+#### `seedGuard.test.ts`
+
+- Host detection fails closed (including multi-host Atlas URIs and SRV).
+- `CONFIRM_SEED` must be exactly `true`; production-like targets also need `ALLOW_PRODUCTION_SEED=true`; refusal messages never contain the connection string.
+
+#### `seed.test.ts`
+
+- A refused run never opens a database connection.
+- The seed creates the demo user with four tasks, is repeatable, and leaves other users' data untouched.
+
 
 ### Test Database Isolation
 
@@ -366,9 +395,11 @@ Swagger UI is served at:
 /api-docs
 ```
 
-The documentation is generated from JSDoc comments above the routes and includes corrected YAML indentation and syntax.
+The documentation is generated from JSDoc comments on the routes plus shared components (error responses, schemas, the `X-Request-Id` header). The raw document is served at `/api-docs.json`.
 
-The interface is fully interactive and supports **Try it out** with Bearer-token authentication.
+CI validates the compiled document (`npm run openapi:validate`): it must be valid OpenAPI, list exactly the expected routes, and follow the documentation policy (for example, every API operation documents `500`, and operations with bodies document `400` and `413`).
+
+The interface supports **Try it out** with Bearer-token authentication.
 
 ### Postman and smoke tests
 
@@ -442,13 +473,19 @@ Errors thrown during request processing, including rejected promises from async 
 | `app.ts` | Configures the Express application: request IDs first, then proxy settings, Helmet, CORS, JSON body limits, health checks, routes, Swagger UI, the JSON 404 handler, and the error handler. |
 | `server.ts` | Application entry point. Connects to the database, starts the HTTP server, and implements graceful shutdown for `SIGTERM` and `SIGINT`. |
 | `config/db.ts` | Handles database lifecycle, URI validation, connection, `ping` confirmation, and `readyState` checks. |
-| `utils/errorCodes.ts` | Central source of truth for API error codes, including `PAYLOAD_TOO_LARGE` (`413`) and `INVALID_JSON` (`400`). |
-| `utils/validators.ts` | Contains Zod schemas and reusable validation middleware builders. |
+| `config/swagger.ts` | Builds the OpenAPI document: shared components, error docs derived from `ERR_CODES`, and the request-ID header on every response. |
+| `config/appInfo.ts` | Reads the app name and version from `package.json`. |
+| `config/rateLimits.ts` | The auth rate limit, shared by the limiter, the OpenAPI text, and the tests. |
+| `controllers/` | Contains application/business logic. |
 | `middlewares/requestId.ts` | Assigns every request an ID (validated client value or generated UUID) and sets the `X-Request-Id` response header. |
 | `middlewares/protect.ts` | Verifies JWTs using `HS256` and attaches the authenticated user payload. |
 | `middlewares/errorHandler.ts` | Central error handler. Maps Zod validation errors, malformed JSON (`400`), and oversized payloads (`413`); logs unexpected errors with the request ID and returns a generic `500` that includes only the ID. |
-| `controllers/` | Contains application/business logic. |
 | `routes/` | Contains route definitions and OpenAPI JSDoc documentation. |
+| `routes/metaRoutes.ts` | `GET /`, `/health/live` and `/health/ready`, with their OpenAPI docs. |
+| `scripts/` | `validate-openapi.mjs`, `verify-docker-image.sh`, and `release-rehearsal.sh`. |
+| `utils/errorCodes.ts` | Central source of truth for API error codes, including `PAYLOAD_TOO_LARGE` (`413`) and `INVALID_JSON` (`400`). |
+| `utils/validators.ts` | Contains Zod schemas and reusable validation middleware builders. |
+| `utils/seed.ts`, `utils/seedGuard.ts` | Demo-data seeding and its pure safety checks (not part of the production build or image). |
 
 ## Design Decisions
 
@@ -481,6 +518,9 @@ Errors thrown during request processing, including rejected promises from async 
 - **The image is verified, not assumed:** CI builds the real production image and checks it (non-root, no source or tests, no dev dependencies, healthy, smoke-tested, clean shutdown) on every change, because that same Dockerfile is what Render builds.
 - **Install scripts are off in the image:** Production dependencies are installed with `--ignore-scripts`; none of them needs one, and this avoids running third-party code (such as an analytics reporter) at build time.
 - **One Node version everywhere:** `engines`, the Dockerfile base image and CI all use Node 24, so a green build means the deployed runtime was tested.
+- **Release evidence lives outside the tagged commit:** Verification results are recorded in the GitHub Release (produced by `scripts/release-rehearsal.sh` from a fresh clone), not committed to the repository, because a file inside a commit cannot record that commit's own SHA, and a post-tag commit would leave `main` ahead of the tag.
+- **Line endings are pinned:** `.gitattributes` forces LF for shell scripts, the Dockerfile, and YAML, so a Windows checkout cannot break them.
+
 
 ## Known Issues
 
@@ -488,3 +528,12 @@ Errors thrown during request processing, including rejected promises from async 
   - **Workaround:** Use a non-SRV MongoDB connection string.
 - **Mongoose 9 TypeScript hooks:** Mongoose 9's TypeScript types required adjustments to hook implementations, which have been resolved using pure `async` / `await`.
 - **Dev-only `npm audit` findings (checked October 2026):** 19 moderate findings remain, all caused by `sprintf-js` (no patched version exists) inside Jest's coverage tooling. They are not in the production image (`npm audit --omit=dev` reports 0), and the only suggested "fix" would downgrade Jest across five major versions. To be re-checked when the Jest toolchain or `sprintf-js` updates.
+- **In-memory rate limiting:** Counters live in the process, so they reset on restart and are not shared between instances. This is correct for the single-instance deployment; scaling out would need a shared store.
+- **Open CORS:** Any origin may call the API. It should be restricted once the intended client origins are known.
+- **Task responses include `__v`:** Mongoose's version key is documented but not hidden.
+- **Password hashing latency:** `bcryptjs` at cost 12 takes 2 to 3 seconds per hash on Render's free tier.
+- **Out of scope:** refresh tokens, password reset, email verification, and a frontend.
+
+## License
+
+ISC. See [LICENSE.txt](LICENSE.txt).
