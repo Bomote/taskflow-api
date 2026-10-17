@@ -30,9 +30,17 @@ container_id() {
   echo "$id"
 }
 
+require_running() {
+  local state
+  state="$(docker inspect --format '{{.State.Status}}' "$1")"
+  [ "$state" = "running" ] || fail "container is '$state', not running (see: docker compose ps; docker compose logs $SERVICE)"
+  echo "  ok   container is running"
+}
+
 static_checks() {
   local cid uid leftovers status="starting"
   cid="$(container_id)"
+  require_running "$cid"
   echo "Runtime image checks ($cid)"
 
   uid="$(docker exec "$cid" id -u)"
@@ -64,6 +72,7 @@ static_checks() {
 shutdown_check() {
   local cid code logs
   cid="$(container_id)"
+  require_running "$cid"
   echo "Graceful shutdown check ($cid)"
 
   docker compose stop --timeout 30 "$SERVICE" > /dev/null
